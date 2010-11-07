@@ -12,7 +12,7 @@ and diagnosis their fitted model. This software is build on R and provides
  data, fit their model using NONMEM, and diagnosis their model by clicking mouse button.
 }
 
-\author{Eun-Kyung Lee,Gyejeong Noh, Hyeong-Seok Lim}
+\author{Eun-Kyung Lee,Gyejeong Noh}
 
 \keyword{ utilities }
 
