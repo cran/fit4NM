@@ -361,7 +361,439 @@ fit4NM<-function()
       glabel("(missing=\".\")",cont=tmp)        
       gbutton("Open",handler=select.CL,cont=tmp)
    }
-   
+   ###### Biosignal data selection##############################################  
+   ######## Batch process ######################################################  
+   BDS.batch<-function(h,...)
+   {
+      openBDS<-function(h,...)
+      {   BDS.dir<<-gfile(text="Open biosignal data file folder",type="selectdir")
+          svalue(control.t)<-BDS.dir
+      }
+      
+      BDScalc<-function(h,...)
+      {  N.BDS<-length(indiv.file)
+         saveDIR<-gfile(text="Select folder for saving data",type="selectdir")
+         win<-gwindow(paste("Biosignal data : Selection : Barch progressing : N=",N.BDS,sep=""),width=300,height=50)
+         BDS.progress<-gslider(from=0,to=N.BDS,by=1,value=0,cont=win)               
+         for(i in 1:length(indiv.file))
+         {   svalue(BDS.progress)<-i
+             temp.tot<-read.csv(indiv.file[i],na.string=".")
+             var.name<-colnames(temp.tot)
+             X.id<-which(var.name==svalue(BDS.list[[1]]))
+             Y.id<-which(var.name==svalue(BDS.list[[2]]))
+             Y<-temp.tot[,X.id]
+             X<-temp.tot[,Y.id]
+             N<-length(Y)
+             diff.Y<-(Y[-1]-Y[-length(Y)])/(X[-1]-X[-length(X)])
+             cut.rate<-as.numeric(svalue(sel.rate))/100
+             cut.n<-round(N*cut.rate)
+
+             sel.id<-sort(sort.list(diff.Y)[-c(1:cut.n)])
+             select.flag<-rep(FALSE,length(X))
+             select.flag[c(1,sel.id+1)]<-TRUE
+             select.data<-cbind(temp.tot,select.flag)
+             colnames(select.data)<-c(colnames(temp.tot),paste("selected",svalue(BDS.list[[2]]),sep="."))
+             file.name<-paste(strsplit(indiv.file[i],split="\\.")[[1]][1],"-",
+                              svalue(BDS.list[[2]]),".csv",sep="")
+             full.file<-paste(saveDIR, file.name,sep="\\")                
+             write.csv(select.data,file.name)           
+          }  
+          dispose(win)
+#          dispose(BDSwin)  
+      }      
+      
+      TDselect<-function(h,...)
+      {  setwd(BDS.dir)
+         indiv.file<<-dir(BDS.dir)
+         temp<-read.csv(indiv.file[1],na.string=".")
+         var.name.temp<-colnames(temp)
+         BDSparam.input<-c("TIME  ","DV ")
+            
+         BDS.g<-list()
+         BDS.list<-list()
+         for(i in 1:2)
+         {  BDS.g[[i]]<-ggroup(cont=BBgroup)
+            temp<- gdroplist(var.name.temp,cont=BDS.g[[i]])
+            glabel(BDSparam.input[i],cont=BDS.g[[i]])
+             BDS.list[[i]]<-temp
+         }
+         BDS.list<<-BDS.list           
+         
+         Button2<-gbutton("Select data",handler= BDScalc)
+         tmp=gframe("",container=BBgroup)
+         add(tmp,Button2)
+         tmp<-gframe("",container=BBgroup)
+         glabel("Difference[t] = (DV[t] - DV[t-1])/(TIME[t]-TIME[t-1]),discard DV[t] if difference[t] ranked in descending order > cutoff percentile",
+                   container=tmp)       
+        
+#         add(BigGroup,ggraphics())
+         
+      }  
+    
+      BDSwin<<-gwindow("Biosignal data selection : Batch processing")
+      BigGroup<<-ggroup(cont=BDSwin,horizontal=TRUE)
+      BBgroup<<-ggroup(cont=BigGroup,horizontal=FALSE)
+ 
+      tmp<-gframe("",cont=BBgroup)
+      control.t<-gedit(" ",width=50)
+      button1<-gbutton("Open data folder",handler=openBDS)
+      add(tmp,button1)
+      add(tmp,control.t)
+      sel.rate<<-gedit(" ",width=50)   
+      tmp=gframe("Cutoff percentile of difference",container=BBgroup)
+      add(tmp,sel.rate)                   
+      Button<-gbutton("Select TIME and DV",handler= TDselect)
+      tmp=gframe("",container=BBgroup)
+      add(tmp,Button)
+   }  
+
+   ######## Individual process##################################################  
+   BDS.indiv<-function(h,...)
+   {
+      BDSsave<-function(h,...)
+      {  temp.tot<-read.csv(file.name,na.string=".")    
+         select.data<-cbind(temp.tot,sel.FINAL)
+         colnames(select.data)<-c(colnames(temp.tot),paste("selected",svalue(BDS.list[[2]]),sep="."))
+         write.csv(select.data,paste(gfile(text="Save case deletion raw data as csv",
+              type="save",filter=list("csv files"=list(patterns=c("*.csv")))),".csv",sep=""),row.names=F)         
+      }
+              
+      BDS.indiv.GUI<-function(h,...)
+      {  file.name<<-svalue(FileList)
+         temp.tot<-read.csv(file.name,na.string=".")
+         var.name.temp<-c("NONE",colnames(temp.tot))
+         BDSparam.input<-c("TIME  ","DV ","Previous selection")
+      
+         BDSINDwin<<-gwindow(paste("Biosignal data : Selection : Individual processing",
+         file.name,sep="---"))
+         BigGroup<<-ggroup(cont=BDSINDwin,horizontal=TRUE)
+         BBgroup<<-ggroup(cont=BigGroup,horizontal=FALSE)
+         sel.rate<<-gedit(" ",width=20)   
+         tmp=gframe("Cutoff percentile of difference",container=BBgroup)
+         add(tmp,sel.rate)  
+         BDS.g<-list()
+         BDS.list<-list()
+         for(i in 1:3)
+         {  BDS.g[[i]]<-ggroup(cont=BBgroup)
+            temp<- gdroplist(var.name.temp,cont=BDS.g[[i]])
+            glabel(BDSparam.input[i],cont=BDS.g[[i]])
+             BDS.list[[i]]<-temp
+         }
+         BDS.list<<-BDS.list           
+#         checkB<-gcheckbox("Use  previous selection")
+#         tmp=gframe("",container=BBgroup)
+#         add(tmp,checkB)
+         Button2<-gbutton("Select data",handler= BDScalc)
+         tmp<-gframe("",container=BBgroup)
+         add(tmp,Button2)
+         Button3<-gbutton("Save data",handler= BDSsave)
+         tmp<-gframe("",container=BBgroup)
+         add(tmp,Button3)
+         tmp<-gframe("",container=BBgroup)
+         glabel("Difference[t] = (DV[t] - DV[t-1])/(TIME[t]-TIME[t-1]),discard DV[t] if difference[t] ranked in descending order > cutoff percentile",
+                   container=tmp)       
+         
+         flag.start<<-TRUE
+         iter.N<<-0
+    }
+ 
+      openBDS<-function(h,...)
+      {   BDS.dir<<-gfile(text="Open biosignal data file folder",type="selectdir")
+          svalue(control.t)<-BDS.dir
+          setwd(BDS.dir)
+          indiv.file<<-dir(BDS.dir)
+          tmp<-gframe("Files",container=BBgroup)
+          Files<-matrix(indiv.file,ncol=1)
+          colnames(Files)<-"Files"
+          FileList<<-gtable(Files,multiple=T,handler=BDS.indiv.GUI)
+          size(FileList)<-c(500,200)
+          add(tmp,FileList)
+      }
+      
+      BDScalc<-function(h,...)
+      {   iter.N<<-iter.N+1
+      
+          if(flag.start)
+          {  flag.start<<-FALSE 
+             temp.tot<-read.csv(file.name,na.string=".")
+             N1<-N2<-nrow(temp.tot)
+             if(svalue(BDS.list[[3]])!="NONE")
+             {  N2<-sum(temp.tot[,svalue(BDS.list[[3]])])         
+             }
+#             tmp<-gframe("",cont=BBgroup,horizontal=FALSE)
+#             glabel(paste("total number of observation = ", N1,"\n",sep=""),cont=tmp)
+#             glabel(paste("total number of previous selection = ", N2,"\n",sep=""),cont=tmp)
+
+             niter<-matrix(c("total N","0",N1,N2),ncol=2)
+             colnames(niter)<-c("iteration","N")
+             NList<<-gtable(niter,multiple=T)
+             size(NList)<-c(150,200)             
+             add(BigGroup,NList)
+             add(BigGroup,ggraphics())                  
+             var.name<-colnames(temp.tot)
+             X.id<-which(var.name==svalue(BDS.list[[1]]))
+             Y.id<-which(var.name==svalue(BDS.list[[2]]))
+             presel.id<-which(var.name==svalue(BDS.list[[3]]))
+             Y<-temp.tot[,Y.id]
+             X<-temp.tot[,X.id]
+             if(length(presel.id)!=0)
+             {  presel<-temp.tot[,presel.id]
+                sel.NULL<-ifelse(presel==1,TRUE,FALSE)
+             } else
+             {  presel<-NULL            
+                sel.NULL<-rep(TRUE,length(Y))
+             }
+             sel.FINAL<-sel.NULL
+             Y<<-Y
+             X<<-X    
+             flag.start<<-FALSE        
+          }
+          sel.NULL<-sel.FINAL
+          flag.start<<-FALSE  
+          Y.new<-Y[sel.NULL]
+          X.new<-X[sel.NULL]     
+          N<-length(Y.new)
+          diff.Y<-(Y.new[-1]-Y.new[-length(Y.new)])/(X.new[-1]-X.new[-length(X.new)])
+          cut.rate<-as.numeric(svalue(sel.rate))/100
+          cut.n<-round(N*cut.rate)
+
+          sel.id<-sort(sort.list(diff.Y)[-c(1:cut.n)])
+          select.flag.temp<-rep(FALSE,length(X.new))
+          select.flag.temp[c(1,sel.id+1)]<-TRUE
+          sel.FINAL[sel.NULL]<-select.flag.temp
+          sel.FINAL<<-sel.FINAL          
+          plot(X.new[sel.id],Y.new[sel.id],type='l',col=3,xlab="TIME",ylab="DV",main=paste("N=",length(sel.id),sep=""))
+          NList[]<-rbind(NList[],c(iter.N,length(sel.id)))
+
+      }      
+    
+      BDSwin<<-gwindow("Biosignal data : Selection : Individual processing")
+      BigGroup<<-ggroup(cont=BDSwin,horizontal=TRUE)
+      BBgroup<<-ggroup(cont=BigGroup,horizontal=FALSE)
+      NITER<<-1
+      tmp<-gframe("",cont=BBgroup)
+      control.t<-gedit(" ",width=50)
+      button1<-gbutton("Open data folder",handler=openBDS)
+      add(tmp,button1)
+      add(tmp,control.t)
+   }    
+   ######## Batch smoothing ##################################################  
+   BDS.smooth.batch<-function(h,...)
+   {  openBDS<-function(h,...)
+      {   BDS.dir<<-gfile(text="Open biosignal data file folder",type="selectdir")
+          svalue(control.t)<-BDS.dir
+      }
+      
+      BDScalc<-function(h,...)
+      {  N.BDS<-length(indiv.file)
+         saveDIR<<-gfile(text="Select folder for data saving",type="selectdir")
+         win<-gwindow(paste("Biosignal data : Central moving average : Barch progressing : N=",N.BDS,sep=""),width=300,height=50)
+         BDS.progress<-gslider(from=0,to=N.BDS,by=1,value=0,cont=win)               
+         for(i in 1:length(indiv.file))
+         {   svalue(BDS.progress)<-i
+             file.name<<-paste(strsplit(indiv.file[i],split="\\.")[[1]][1],"-",
+                              svalue(BDS.list[[2]]),".csv",sep="")                
+             full.file<-paste(saveDIR, file.name,sep="\\")                          
+             temp.tot<-read.csv(indiv.file[i],na.string=".")
+             var.name<-colnames(temp.tot)
+             X.id<-which(var.name==svalue(BDS.list[[1]]))
+             Y.id<-which(var.name==svalue(BDS.list[[2]]))             
+             presel.id<-which(var.name==svalue(BDS.list[[3]]))
+             if(length(presel.id)!=0)
+             {  Y<-temp.tot[temp.tot[,presel.id],Y.id]
+                X<-temp.tot[temp.tot[,presel.id],X.id]
+             } else
+             {  Y<-temp.tot[,Y.id]
+                X<-temp.tot[,X.id]
+             }               
+
+             N<-length(Y)
+             MovingW<-as.numeric(svalue(MW))
+             addMW<-floor(MovingW/2)
+             Y.new<-NULL
+             for(i in 1:N)
+             {  if(i < addMW)
+                {  Y.new<-c(Y.new,mean(Y[1:(i+addMW)]))
+                } else if(i >N-addMW)
+                {  Y.new<-c(Y.new,mean(Y[(i-addMW):N]))
+                } else
+                {  Y.new<-c(Y.new,mean(Y[(i-addMW):(i+addMW)]))
+                }  
+             }
+             Y<-rep(NA,nrow(temp.tot))
+             if(length(presel.id)!=0)
+             {  Y[temp.tot[,presel.id]]<-Y.new
+             } else
+             {  Y<-Y.new
+             } 
+             tot.data<-cbind(temp.tot,Y)
+
+             colnames(tot.data)<-c(colnames(temp.tot),paste(svalue(BDS.list[[2]]),".smooth",sep=""))
+             tot.data<<-tot.data            
+             write.csv(tot.data,full.file)           
+          }  
+          dispose(win)
+#          dispose(BDSwin)  
+      }      
+      
+      TDselect<-function(h,...)
+      {  setwd(BDS.dir)
+         indiv.file<<-dir(BDS.dir)
+         temp<-read.csv(indiv.file[1],na.string=".")
+         var.name.temp<-colnames(temp)
+         BDSparam.input<-c("TIME  ","DV ","Previous selection")
+            
+         BDS.g<-list()
+         BDS.list<-list()
+         for(i in 1:3)
+         {  BDS.g[[i]]<-ggroup(cont=BBgroup)
+            temp<- gdroplist(var.name.temp,cont=BDS.g[[i]])
+            glabel(BDSparam.input[i],cont=BDS.g[[i]])
+             BDS.list[[i]]<-temp
+         }
+         BDS.list<<-BDS.list           
+         
+         Button2<-gbutton("Calculate central moving average",handler= BDScalc)
+         tmp=gframe("",container=BBgroup)
+         add(tmp,Button2)
+        
+      }  
+    
+      BDSwin<<-gwindow("Biosignal data : Selection : Batch processing")
+      BigGroup<<-ggroup(cont=BDSwin,horizontal=TRUE)
+      BBgroup<<-ggroup(cont=BigGroup,horizontal=FALSE)
+ 
+      tmp<-gframe("",cont=BBgroup)
+      control.t<-gedit(" ",width=50)
+      button1<-gbutton("Open data folder",handler=openBDS)
+      add(tmp,button1)
+      add(tmp,control.t)
+      MW<<-gedit(" ",width=20)   
+      tmp=gframe("Moving window (# of obs, odd number)",container=BBgroup)
+      add(tmp,MW)                  
+      Button<-gbutton("Select TIME and DV",handler= TDselect)
+      tmp=gframe("",container=BBgroup)
+      add(tmp,Button)
+   }  
+      
+   ######## Individual smoothing ##################################################  
+   BDS.smooth<-function(h,...)
+   {
+      BDSsave<-function(h,...)
+      {    write.csv(tot.data,paste(gfile(text="Save central moving average data as csv",
+              type="save",filter=list("csv files"=list(patterns=c("*.csv")))),".csv",sep=""),row.names=F)         
+      }
+              
+      BDS.indiv.GUI<-function(h,...)
+      {  file.name<<-svalue(FileList)
+         temp.tot<-read.csv(file.name,na.string=".")
+         var.name.temp<-c("NONE",colnames(temp.tot))
+         BDSparam.input<-c("TIME  ","DV ","Previous selection")
+      
+         BDSINDwin<<-gwindow(paste("Biosignal data : Central moving average : Individual process",
+         file.name,sep="---"))
+         BigGroup<<-ggroup(cont=BDSINDwin,horizontal=TRUE)
+         BBgroup<<-ggroup(cont=BigGroup,horizontal=FALSE)
+         MW<<-gedit(" ",width=20)   
+         tmp=gframe("Moving window (# of obs, odd number)",container=BBgroup)
+         add(tmp,MW)  
+         BDS.g<-list()
+         BDS.list<-list()
+         for(i in 1:3)
+         {  BDS.g[[i]]<-ggroup(cont=BBgroup)
+            temp<- gdroplist(var.name.temp,cont=BDS.g[[i]])
+            glabel(BDSparam.input[i],cont=BDS.g[[i]])
+             BDS.list[[i]]<-temp
+         }
+         BDS.list<<-BDS.list           
+         Button2<-gbutton("Calculate central moving average",handler= BDSsmoothcalc)
+         tmp<-gframe("",container=BBgroup)
+         add(tmp,Button2)
+         Button21<-gbutton("Draw plot",handler= BDSplot)
+         tmp<-gframe("",container=BBgroup)
+         add(tmp,Button21)         
+         Button3<-gbutton("Save data",handler= BDSsave)
+         tmp<-gframe("",container=BBgroup)
+         add(tmp,Button3)
+         flag.start<<-TRUE
+      }
+      
+      BDSplot<-function(h,...)
+      {   plot(X.plot,Y.plot,type='l',lty=2,col="grey",xlab="TIME",ylab="DV")
+          lines(X.plot,Y.new.plot,col=2,lwd=2)
+       }
+      
+      openBDS<-function(h,...)
+      {   BDS.dir<<-gfile(text="Open biosignal data file folder",type="selectdir")
+          svalue(control.t)<-BDS.dir
+          setwd(BDS.dir)
+          indiv.file<<-dir(BDS.dir)
+          tmp<-gframe("Files",container=BBgroup)
+          FileList<<-gtable(indiv.file,handler=BDS.indiv.GUI)
+          size(FileList)<-c(500,200)
+          add(tmp,FileList)
+      }
+ 
+      BDSsmoothcalc<-function(h,...)
+      {   if(start.flag)
+          {  add(BigGroup,ggraphics())  
+          } 
+          start.flag<<-FALSE
+          temp.tot<-read.csv(file.name,na.string=".")
+          var.name<-colnames(temp.tot)
+          X.id<-which(var.name==svalue(BDS.list[[1]]))
+          Y.id<-which(var.name==svalue(BDS.list[[2]]))
+          presel.id<-which(var.name==svalue(BDS.list[[3]]))
+          if(length(presel.id)!=0)
+          {  Y<-temp.tot[temp.tot[,presel.id],Y.id]
+             X<-temp.tot[temp.tot[,presel.id],X.id]
+          } else
+          {  Y<-temp.tot[,Y.id]
+             X<-temp.tot[,X.id]
+          }             
+          N<-length(Y)
+          MovingW<-as.numeric(svalue(MW))
+          addMW<-floor(MovingW/2)
+          Y.new<-NULL
+          for(i in 1:N)
+          {  if(i < addMW)
+             {  Y.new<-c(Y.new,mean(Y[1:(i+addMW)]))
+             } else if(i >N-addMW)
+             {  Y.new<-c(Y.new,mean(Y[(i-addMW):N]))
+             } else
+             {  Y.new<-c(Y.new,mean(Y[(i-addMW):(i+addMW)]))
+             }  
+          }
+          Y.t<-rep(NA,nrow(temp.tot))
+          if(length(presel.id)!=0)
+          {  Y.t[temp.tot[,presel.id]]<-Y.new
+          } else
+          {  Y.t<-Y.new
+          } 
+          tot.data<-cbind(temp.tot,Y.t)
+          colnames(tot.data)<-c(colnames(temp.tot),paste(svalue(BDS.list[[2]]),".smooth",sep=""))
+          tot.data<<-tot.data     
+          X.plot<<-X
+          Y.plot<<-Y
+          Y.new.plot<<-Y.new        
+          plot(X,Y,type='l',lty=2,col="grey",xlab="TIME",ylab="DV")
+          lines(X,Y.new,col=2,lwd=2)
+      }      
+      
+
+    
+      BDSwin<<-gwindow("Biosignal data selection : Central moving average")
+      BigGroup<<-ggroup(cont=BDSwin,horizontal=TRUE)
+      BBgroup<<-ggroup(cont=BigGroup,horizontal=FALSE)
+ 
+      tmp<-gframe("",cont=BBgroup)
+      control.t<-gedit(" ",width=50)
+      button1<-gbutton("Open data folder",handler=openBDS)
+      add(tmp,button1)
+      add(tmp,control.t)
+      start.flag<<-TRUE
+   } 
+     
    #### NONMEM data ############################################################  
    ###### Notes before NONMEM data creation ####################################  
    dataNotes<-function(h,...)
@@ -1147,6 +1579,7 @@ fit4NM<-function()
    {  gmessage("*** Notes before run ***
            \nThe file name of a control stream should be runnumber.ctl.
            \nID should be #ID.
+           \nIPRED and IWRES should be defined in the control file.           
            \nIndividual predictions = IPRED  
            \nIndividual weighted residuals = IWRES 
            \nSemicolons used for comments in a NONMEM control stream should be preceded by one space as follows.
@@ -1223,38 +1656,39 @@ fit4NM<-function()
                 write.table(NMversion,"NM.version")
 
                 RemakeCTL(paste(dir.name,"\\",file.id,".ctl",sep=""))
+                write.table(" ",paste(dir.name,"\\",file.id,".console",sep=""))                
                 system(NONMEM.command,wait=F) 
           	OpenNMConsole(file.id,paste(dir.name,"\\",file.id,".console",sep=""))
                 alarm()
+                TOT.temp<-TOT.RUN
+                TOT.temp$num<-TOT.temp$num+1
+                TOT.temp$data<-rbind(TOT.temp$data,c(file.id,dir.name,svalue(parent)))
+                colnames(TOT.temp$data)<-c("ID","path","parents")
+                TOT.RUN<<-TOT.temp
+                OpenResult(file.id,paste(dir.name,"\\",file.id,".res",sep=""))
+                D.LST<-readLines(paste(dir.name,"\\",file.id,".res",sep=""))
                 if(sum(dir()==paste(file.id,".ETA",sep=""))!=0)
-             	{  TOT.temp<-TOT.RUN
-                   TOT.temp$num<-TOT.temp$num+1
-                   TOT.temp$data<-rbind(TOT.temp$data,c(file.id,dir.name,svalue(parent)))
-                   colnames(TOT.temp$data)<-c("ID","path","parents")
-                   TOT.RUN<<-TOT.temp
-                   OpenResult(file.id,paste(dir.name,"\\",file.id,".res",sep=""))
-                   D.LST<-readLines(paste(dir.name,"\\",file.id,".res",sep=""))
-                   ETA<-read.table(paste(dir.name,"\\",file.id,".ETA",sep=""),skip=1,header=T)
+             	{   ETA<-read.table(paste(dir.name,"\\",file.id,".ETA",sep=""),skip=1,header=T)
                    temp.ETA<-colnames(ETA)
                    ET.id<-NULL
                    for(i in 1:length(temp.ETA))
                    {  if(length(strsplit(temp.ETA[i],"ET")[[1]])>1)
                          ET.id<-c(ET.id,i)
                    }
-                   ETA<-ETA[,ET.id]              
-                   data.tempt<-read.csv(data.file,na.string=".")   
-                   if(sum(toupper(colnames(data.tempt))=="MDV")!=0)
-                   {  data.i<-which(toupper(colnames(data.tempt))=="MDV")
-                      temp<-data.tempt[,data.i]
-                      temp<-temp[temp==0]
-                      data.n<-length(temp)         
-                   } else
-                   {  data.n<-nrow(data.tempt)
-                   }
-                   ShowResult1(D.LST,param.num,data.n,Description,ETA,file.id,dir.name)
+                   ETA<-ETA[,ET.id]       
                 } else
-                {  gconfirm(paste("fitting failure : ",file.id,".ctl ",sep=""),icon="error")                  
-                }  
+                { ETA<-NULL
+                }                        
+                data.tempt<-read.csv(data.file,na.string=".")   
+                if(sum(toupper(colnames(data.tempt))=="MDV")!=0)
+                {  data.i<-which(toupper(colnames(data.tempt))=="MDV")
+                   temp<-data.tempt[,data.i]
+                   temp<-temp[temp==0]
+                   data.n<-length(temp)         
+                } else
+                {  data.n<-nrow(data.tempt)
+                }
+                ShowResult1(D.LST,param.num,data.n,Description,ETA,file.id,dir.name)
          })
                 
       	 RunNM.2<-gbutton("Run alternative NONMEM",handler=function(h,...){ 
@@ -1282,19 +1716,19 @@ fit4NM<-function()
                 write.table(NMversion,"NM.version")
 
                 RemakeCTL(paste(dir.name,"\\",file.id,".ctl",sep=""))
+                write.table(" ",paste(dir.name,"\\",file.id,".console",sep=""))                
                 system(NONMEM.command,wait=F) 
              	OpenNMConsole(file.id,paste(dir.name,"\\",file.id,".console",sep=""))
                 alarm()
-                
+                TOT.temp<-TOT.RUN
+                TOT.temp$num<-TOT.temp$num+1
+                TOT.temp$data<-rbind(TOT.temp$data,c(file.id,dir.name,svalue(parent)))
+                colnames(TOT.temp$data)<-c("ID","path","parents")
+                TOT.RUN<<-TOT.temp
+                OpenResult(file.id,paste(dir.name,"\\",file.id,".res",sep=""))
+                D.LST<-readLines(paste(dir.name,"\\",file.id,".res",sep=""))
                 if(sum(dir()==paste(file.id,".ETA",sep=""))!=0)
-             	{  TOT.temp<-TOT.RUN
-                   TOT.temp$num<-TOT.temp$num+1
-                   TOT.temp$data<-rbind(TOT.temp$data,c(file.id,dir.name,svalue(parent)))
-                   colnames(TOT.temp$data)<-c("ID","path","parents")
-                   TOT.RUN<<-TOT.temp
-                   OpenResult(file.id,paste(dir.name,"\\",file.id,".res",sep=""))
-                   D.LST<-readLines(paste(dir.name,"\\",file.id,".res",sep=""))
-                   ETA<-read.table(paste(dir.name,"\\",file.id,".ETA",sep=""),skip=1,header=T)
+             	{  ETA<-read.table(paste(dir.name,"\\",file.id,".ETA",sep=""),skip=1,header=T)
                    temp.ETA<-colnames(ETA)
                    ET.id<-NULL
                    for(i in 1:length(temp.ETA))
@@ -1302,19 +1736,19 @@ fit4NM<-function()
                          ET.id<-c(ET.id,i)
                    }
                    ETA<-ETA[,ET.id]                              
-                   data.tempt<-read.csv(data.file,na.string=".")   
-                   if(sum(toupper(colnames(data.tempt))=="MDV")!=0)
-                   {  data.i<-which(toupper(colnames(data.tempt))=="MDV")
-                      temp<-data.tempt[,data.i]
-                      temp<-temp[temp==0]
-                      data.n<-length(temp)         
-                   } else
-                   {  data.n<-nrow(data.tempt)
-                   }  
-                   ShowResult1(D.LST,param.num,data.n,Description,ETA,file.id,dir.name)
                 } else
-                {  gconfirm(paste("NONMEM failure : ",file.id,".ctl ",sep=""),icon="error")                  
-                }                  
+                {  ETA<-NULL
+                }   
+                data.tempt<-read.csv(data.file,na.string=".")   
+                if(sum(toupper(colnames(data.tempt))=="MDV")!=0)
+                {  data.i<-which(toupper(colnames(data.tempt))=="MDV")
+                   temp<-data.tempt[,data.i]
+                   temp<-temp[temp==0]
+                   data.n<-length(temp)         
+                } else
+                {  data.n<-nrow(data.tempt)
+                }  
+                ShowResult1(D.LST,param.num,data.n,Description,ETA,file.id,dir.name)               
          })  
                   
          openrundata<-function(h,...)
@@ -1569,12 +2003,12 @@ fit4NM<-function()
       } else
       {  run.table[][TOT.RUN$num,]<-temp
       }
-
-      se.ETA<-apply(ETA,2,sd) 
-      shrinkage.ETA<-matrix(NA,ncol=N.eta,nrow=N.eta)
-      diag(shrinkage.ETA)<-(1-se.ETA/sqrt(diag(OMEGA)))*100
-      shrinkage<-c(rep("NA",length(THETA)),round(shrinkage.ETA,3),rep("NA",length(SIGMA)))
-
+      shrinkage.ETA<-matrix(NA,ncol=N.eta,nrow=N.eta)    
+      if(!is.null(ETA))
+      {  se.ETA<-apply(ETA,2,sd) 
+         diag(shrinkage.ETA)<-(1-se.ETA/sqrt(diag(OMEGA)))*100
+      }
+      shrinkage<-c(rep("NA",length(THETA)),round(shrinkage.ETA,3),rep("NA",length(SIGMA)))   
       CV.ETA<-matrix(NA,ncol=N.eta,nrow=N.eta)
       diag(CV.ETA)<-sqrt(diag(OMEGA))*100
       CV<-c(rep("NA",length(THETA)),round(CV.ETA,3),rep("NA",length(SIGMA)))
@@ -1684,21 +2118,22 @@ fit4NM<-function()
          write.table(NMversion,"NM.version")
 
          RemakeCTL(paste(dir.name,file.name,sep="\\"))
+         write.table(" ",paste(dir.name,"\\",file.id,".console",sep=""))
          system(NONMEM.command,invisible=F,show.output.on.console=F,wait=F) 
          OpenNMConsole(file.id,paste(dir.name,"\\",file.id,".console",sep=""))
          alarm()
-         if(sum(dir()==paste(file.id,".ETA",sep=""))!=0)
-         {  temp<-strsplit(dir.name,split="\\\\")[[1]]
-            file.id<-temp[length(temp)]
-            TOT.temp<-TOT.RUN
-            TOT.temp$num<-TOT.temp$num+1
-            TOT.temp$data<-rbind(TOT.temp$data,c(file.id,dir.name,parents))
-            colnames(TOT.temp$data)<-c("ID","path","parents")
-            TOT.RUN<<-TOT.temp
+         temp<-strsplit(dir.name,split="\\\\")[[1]]
+         file.id<-temp[length(temp)]
+         TOT.temp<-TOT.RUN
+         TOT.temp$num<-TOT.temp$num+1
+         TOT.temp$data<-rbind(TOT.temp$data,c(file.id,dir.name,parents))
+         colnames(TOT.temp$data)<-c("ID","path","parents")
+         TOT.RUN<<-TOT.temp
 
-            OpenResult(file.id,paste(dir.name,"\\",file.id,".res",sep=""))
-            D.LST<-readLines(paste(dir.name,"\\",file.id,".res",sep=""))
-            ETA<-read.table(paste(dir.name,"\\",file.id,".ETA",sep=""),skip=1,header=T)
+         OpenResult(file.id,paste(dir.name,"\\",file.id,".res",sep=""))
+         D.LST<-readLines(paste(dir.name,"\\",file.id,".res",sep=""))
+         if(sum(dir()==paste(file.id,".ETA",sep=""))!=0)
+         {  ETA<-read.table(paste(dir.name,"\\",file.id,".ETA",sep=""),skip=1,header=T)
             temp.ETA<-colnames(ETA)
             ET.id<-NULL
             for(i in 1:length(temp.ETA))
@@ -1706,20 +2141,20 @@ fit4NM<-function()
                   ET.id<-c(ET.id,i)
             }
             ETA<-ETA[,ET.id]           
-            data.tempt<-read.csv(data.file,na.string=".")   
-            if(sum(toupper(colnames(data.tempt))=="MDV")!=0)
-            {  data.i<-which(toupper(colnames(data.tempt))=="MDV")
-               temp<-data.tempt[,data.i]
-               temp<-temp[temp==0]
-               data.n<-length(temp)         
-            } else
-            {  data.n<-nrow(data.tempt)
-            }
-         
-            ShowResult1(D.LST,param.num=param.num,data.n,Description=Description,ETA,file.id,dir.name)               
          } else
-         {  gconfirm(paste("fitting failure : ",file.id,".ctl ",sep=""),icon="error")
-         }  
+         {  ETA<-NULL
+         }   
+         data.tempt<-read.csv(data.file,na.string=".")   
+         if(sum(toupper(colnames(data.tempt))=="MDV")!=0)
+         {  data.i<-which(toupper(colnames(data.tempt))=="MDV")
+            temp<-data.tempt[,data.i]
+            temp<-temp[temp==0]
+            data.n<-length(temp)         
+         } else
+         {  data.n<-nrow(data.tempt)
+         }
+         ShowResult1(D.LST,param.num=param.num,data.n,Description=Description,ETA,file.id,dir.name)               
+          
       }
 
       SeqRun<-function()
@@ -1748,42 +2183,42 @@ fit4NM<-function()
             write.table(NMversion,"NM.version")
 
             RemakeCTL(paste(dir.name,file.name,sep="\\"))
+            write.table(" ",paste(dir.name,"\\",file.id,".console",sep=""))            
             system(NONMEM.command,invisible=F,show.output.on.console=F,wait=F)
             OpenNMConsole(file.id,paste(dir.name,"\\",file.id,".console",sep=""))           
             alarm()
-            if(sum(dir()==paste(file.id,".ETA",sep=""))!=0)
-            {  temp<-strsplit(dir.name,split="\\\\")[[1]]
-               file.id<-temp[length(temp)]
- 
-               TOT.temp<-TOT.RUN
-               TOT.temp$num<-TOT.temp$num+1
-               TOT.temp$data<-rbind(TOT.temp$data,c(file.id,dir.name,parents))
-               colnames(TOT.temp$data)<-c("ID","path","parents")
-               TOT.RUN<<-TOT.temp
+            temp<-strsplit(dir.name,split="\\\\")[[1]]
+            file.id<-temp[length(temp)]
+            TOT.temp<-TOT.RUN
+            TOT.temp$num<-TOT.temp$num+1
+            TOT.temp$data<-rbind(TOT.temp$data,c(file.id,dir.name,parents))
+            colnames(TOT.temp$data)<-c("ID","path","parents")
+            TOT.RUN<<-TOT.temp
 
-               OpenResult(file.id,paste(dir.name,"\\",file.id,".res",sep=""))      
-               D.LST<-readLines(paste(dir.name,"\\",file.id,".res",sep=""))
-               ETA<-read.table(paste(dir.name,"\\",file.id,".ETA",sep=""),skip=1,header=T)
+            OpenResult(file.id,paste(dir.name,"\\",file.id,".res",sep=""))      
+            D.LST<-readLines(paste(dir.name,"\\",file.id,".res",sep=""))
+            if(sum(dir()==paste(file.id,".ETA",sep=""))!=0)
+            {  ETA<-read.table(paste(dir.name,"\\",file.id,".ETA",sep=""),skip=1,header=T)
                temp.ETA<-colnames(ETA)
                ET.id<-NULL
                for(i in 1:length(temp.ETA))
                {  if(length(strsplit(temp.ETA[i],"ET")[[1]])>1)
-                  ET.id<-c(ET.id,i)
+                    ET.id<-c(ET.id,i)
                }
                ETA<-ETA[,ET.id]              
-               data.tempt<-read.csv(data.file,na.string=".")   
-               if(sum(toupper(colnames(data.tempt))=="MDV")!=0)
-               {  data.i<-which(toupper(colnames(data.tempt))=="MDV")
-                  temp<-data.tempt[,data.i]
-                  temp<-temp[temp==0]
-                  data.n<-length(temp)         
-               } else
-               {  data.n<-nrow(data.tempt)
-               }
-               ShowResult1(D.LST,param.num=param.num,data.n,Description=Description,ETA,file.id,dir.name)                 
             } else
-            {  gconfirm(paste("fitting failure : ",file.id,".ctl ",sep=""),icon="error")
-            }  
+            {  ETA<-NULL
+            }   
+            data.tempt<-read.csv(data.file,na.string=".")   
+            if(sum(toupper(colnames(data.tempt))=="MDV")!=0)
+            {  data.i<-which(toupper(colnames(data.tempt))=="MDV")
+               temp<-data.tempt[,data.i]
+               temp<-temp[temp==0]
+               data.n<-length(temp)         
+            } else
+            {  data.n<-nrow(data.tempt)
+            }
+            ShowResult1(D.LST,param.num=param.num,data.n,Description=Description,ETA,file.id,dir.name)                                       
          }
       }
 
@@ -2125,7 +2560,7 @@ fit4NM<-function()
 
       for(ii in 1:nrow(run.f))
       {  temp<-as.character(run.f[ii,1:13])
-         for(j in c(2,3,4,5,11,12))
+         for(j in c(1,2,3,4,5,11,12))
             temp[j]<-as.character(run.f[ii,j])
          if(TOT.RUN$num>2)
          {  run.table[]<-rbind(run.table[],temp)
@@ -2134,7 +2569,7 @@ fit4NM<-function()
          }
       }    
       TOT.temp<-TOT.RUN
-      TOT.temp$data<-cbind(run.f$Run.number,as.character(run.f$Path),as.character(run.f$Parents))          
+      TOT.temp$data<-cbind(as.character(run.f$Run.number),as.character(run.f$Path),as.character(run.f$Parents))          
       colnames(TOT.temp$data)<-c("ID","path","parents")
       TOT.temp$data<-rbind(TOT.RUN$data,TOT.temp$data)
       TOT.temp$num<-TOT.RUN$num+nrow(run.f)   
@@ -2331,20 +2766,20 @@ fit4NM<-function()
             temp.Y.hat<-Ex.data$Y.hat[sel.id]
             R2i<-sum((temp.Y-temp.Y.hat)^2)/sum((temp.Y-mean(temp.Y))^2)
             PEi<-(temp.Y-temp.Y.hat)/temp.Y.hat*100
-            MDAWR.i<-median(abs(PEi))
-            MDWR.i<-median(PEi)
-            MAWR.i<-mean(abs(PEi))
-            MWR.i<-mean(PEi)
-            RMSWR.i<-sqrt(mean((PEi)^2))
+            MDAWR.i<-median(abs(PEi),na.rm=T)
+            MDWR.i<-median(PEi,na.rm=T)
+            MAWR.i<-mean(abs(PEi),na.rm=T)
+            MWR.i<-mean(PEi,na.rm=T)
+            RMSWR.i<-sqrt(mean((PEi)^2,na.rm=T))
             
             MP.Indiv<-rbind(MP.Indiv,c(i,MDWR.i,MDAWR.i,MAWR.i,MWR.i))            
          }
          PE<-(Ex.data$Y-Ex.data$Y.hat)/Ex.data$Y.hat*100
-         MDAWR<-median(abs(PE))
-         MDWR<-median(PE)
-         MAWR<-mean(abs(PE))
-         MWR<-mean(PE)      
-         RMSWR<-sqrt(mean((PE)^2))          
+         MDAWR<-median(abs(PE),na.rm=T)
+         MDWR<-median(PE,na.rm=T)
+         MAWR<-mean(abs(PE),na.rm=T)
+         MWR<-mean(PE,na.rm=T)      
+         RMSWR<-sqrt(mean((PE)^2,na.rm=T))          
          MP.pop<-matrix(c(MDWR,MDAWR,MAWR,MWR),nrow=1)
          colnames(MP.Indiv)<-c("ID","MDWR","MDAWR","MAWR","MWR")
          colnames(MP.pop)<-c("MDWR","MDAWR","MAWR","MWR")
@@ -2388,7 +2823,7 @@ fit4NM<-function()
       select.MP<-function(h,...)
       {  noh.name<-gfile(text="data file",type="open")
          svalue(file.MP)<-noh.name
-         EX.data.T<<-read.csv(noh.name)
+         EX.data.T<<-read.csv(noh.name,na.string=".")
          temp.list<-colnames(EX.data.T)  
          MPparam.input<-c("ID      ","Observation(Y)   ","Prediction(Y_hat)    ")
          MP.g<-list()
@@ -5358,8 +5793,7 @@ fit4NM<-function()
          add(tmp,Button5)   
          Button6<-gbutton("Plot",handler=drawLLT)      
          tmp<-gframe("Log-likelihood profiling plot",cont=group)
-         add(tmp,Button6)   
-     
+         add(tmp,Button6)        
         
          tmp<-gframe("Delta.OBJ = OBJ during profiling - OBJ of selected model",cont=group)
          tmp<-gframe("redline = delta. OBJ 3.84",cont=group)
@@ -5648,7 +6082,7 @@ fit4NM<-function()
       select.PE<-function(h,...)
       {  noh.name<-gfile(text="data file",type="open")
          svalue(file.PE)<-noh.name
-         EX.data.T<<-read.csv(noh.name)
+         EX.data.T<<-read.csv(noh.name,na.string=".")
          temp.list<-colnames(EX.data.T)  
          PEparam.input<-c("ID      ","TIME ","Observation    ","Prediction     ")
          PE.g<-list()
@@ -5694,12 +6128,12 @@ fit4NM<-function()
             E<-ifelse(Ni<=20,Eff[Eff$N==Ni,2],2/pi)
             PE.temp<-Ex.data$PE[sel.id]
             TIME.temp<-Ex.data$TIME[sel.id]
-            MDAPEi<-median(abs(PE.temp))
-            MAPEi<-mean(abs(PE.temp))
-            MDPEi<-median(PE.temp)
-            WOBBLEi<-median(abs(PE.temp-MDPEi))
-            RMSEi<-sqrt(mean(PE.temp^2))
-            MPEi<-mean(PE.temp)            
+            MDAPEi<-median(abs(PE.temp),na.rm=T)
+            MAPEi<-mean(abs(PE.temp),na.rm=T)
+            MDPEi<-median(PE.temp,na.rm=T)
+            WOBBLEi<-median(abs(PE.temp-MDPEi),na.rm=T)
+            RMSEi<-sqrt(mean(PE.temp^2,na.rm=T))
+            MPEi<-mean(PE.temp,na.rm=T)            
             time.unit<-svalue(time.t)
             if(time.unit=="sec")
             {  TT<-TIME.temp/60/60
@@ -5712,9 +6146,9 @@ fit4NM<-function()
             {  temp.lm<-summary(lm(abs(PE.temp)~TT))
                DIVERGENCEi<-temp.lm$coef[2,1]
                DIV.var<-temp.lm$coef[2,2]^2
-               MDAPE.var<-var(abs(PE.temp))/(Ni*E)  
-               MDPE.var<-var(PE.temp)/(Ni*E)                          
-               WOB.var<-var(abs(PE.temp-MDPEi))/(Ni*E)                            
+               MDAPE.var<-var(abs(PE.temp),na.rm=T)/(Ni*E)  
+               MDPE.var<-var(PE.temp,na.rm=T)/(Ni*E)                          
+               WOB.var<-var(abs(PE.temp-MDPEi),na.rm=T)/(Ni*E)                            
             } else
             {  DIVERGENCEi<-0
                DIV.var<-0
@@ -5782,6 +6216,504 @@ fit4NM<-function()
       gbutton("Open",handler=select.PE,cont=tmp)
    }
    
+   #### case deletion / jackkinfe  #############################################
+   CDD<-function(h,...)
+   {
+      CDD.ctl<-function()
+      {  Current.CTL<-current.ctl
+         temp.CTL<-Current.CTL
+         temp<-strsplit(temp.CTL,split=" ")
+         indicator<-NULL
+         for(i in 1:length(temp))
+           indicator<-rbind(indicator,temp[[i]][1])
+         n.CTL<-length(temp.CTL)
+
+         id<-which(indicator=="$DATA")
+         temp.CTL[id]<-"$DATA CDD.csv"
+         CV.CTL<-temp.CTL
+         write.table(CV.CTL,"CDD.ctl",quote=FALSE,row.names=FALSE,col.names=FALSE)
+      }
+ 
+
+      CDDcalc<-function(h,...)
+      {  
+         CDD.ctl()
+         var.name<-tolower(colnames(D.data))
+         ID.id<-which(var.name=="x.id")
+           
+         ID.list<-unique(D.data[,ID.id])
+         N<-length(ID.list)      
+         win<-gwindow(paste("Case deletion progress : N=",N,sep=""),width=300,height=50)
+         CDD.progress<-gslider(from=0,to=N,by=1,value=0,cont=win)
+         D.LST1<<-readLines(paste(CDD.RUN,".RES",sep=""))
+         EST<-select.EST(D.LST1)   
+         COV<-select.COV(D.LST1)
+         OBJ<-select.OBJ(D.LST1)
+         CDD.tot<-NULL
+         for(k in 1:N)
+         {  svalue(CDD.progress)<-k
+            RUN.sample<-NULL
+            id.temp<-which(D.data[,ID.id]!=ID.list[k])
+            RUN.sample<-D.data[id.temp,]
+            write.table(RUN.sample,"CDD.csv",quote=FALSE,row.names=FALSE,col.names=FALSE,na=".",sep=",")
+            CDD.command<-paste(Default.NMpath," CDD.CTL CDD.RES")
+            system(CDD.command,invisible=F,show.output.on.console=F)   
+            
+            D.LST<<-readLines("CDD.RES")
+            RUN.EST<-select.EST(D.LST)   
+            RUN.COV<-select.COV(D.LST)
+            RUN.SE<-select.SE(D.LST)
+            RUN.OBJ<-select.OBJ(D.LST)
+            TH.temp<-as.matrix(RUN.EST$TH-EST$TH)
+            COV.temp<-COV[1:length(TH.temp),1:length(TH.temp)]
+            RUNCOV.temp<-RUN.COV[1:length(TH.temp),1:length(TH.temp)]
+            CS<-t(TH.temp)%*%solve(COV.temp)%*%(TH.temp)
+            CR<-det(COV.temp)/det(RUNCOV.temp) 
+            AddInfo<-select.AddInfo(CDD.RUN)
+            
+            result<-c(k,AddInfo[c(5,3,4)],c(RUN.EST$TH),c(RUN.EST$OMEGA),c(RUN.EST$SIGMA),
+                      c(RUN.SE$TH),c(RUN.SE$OMEGA),c(RUN.SE$SIGMA),CS,CR)   
+            CDD.tot<-rbind(CDD.tot,result)  
+         }
+         omega.name.m<-outer(1:nrow(EST$OMEGA.m),1:nrow(EST$OMEGA.m),function(x,y) paste("OM",x,y,sep=""))
+         colnames(CDD.tot)<-c("k","OBJ","MIN","COV", names(RUN.EST$TH),
+                       omega.name.m[upper.tri(omega.name.m,diag=TRUE)],names(RUN.EST$SIGMA),
+                       paste("SE-",c(names(RUN.EST$TH),omega.name.m[lower.tri(omega.name.m,diag=TRUE)],names(RUN.EST$SIGMA)),sep=""),
+                       "CS","CR")
+         CDD.tot<-data.frame(CDD.tot)
+         CDD.tot<<-CDD.tot
+         dispose(win)
+         EST.tot<-c(EST$TH,EST$OMEGA,EST$SIGMA)
+         EST.CDD<-CDD.tot[,(1:length(EST.tot))+4]
+         n.TH<-length(RUN.EST$TH)
+         bias<-(N-1)*(apply(EST.CDD,2,function(x) mean(as.numeric(as.character(x))))-EST.tot)
+         Jack.est<-N*EST.tot-(N-1)/N*apply(EST.CDD,2,function(x) sum(as.numeric(as.character(x))))
+         Jack.var<-sqrt(((N*EST.tot-Jack.est)^2)/(N-1)-2*(N*EST.tot-Jack.est)*apply(EST.CDD,2,function(x) sum(as.numeric(as.character(x))))/N+
+                     (N-1)/N*apply(EST.CDD,2,function(x) sum(as.numeric(as.character(x))^2)))
+         Jack.L<-EST.tot-qt(0.975,N-1)*sqrt(Jack.var)
+         Jack.U<-EST.tot+qt(0.975,N-1)*sqrt(Jack.var)
+         CDD.summary<-cbind(bias,EST.tot,Jack.est,Jack.var,Jack.L,Jack.U)   
+         colnames(CDD.summary)<-c("Bias","Parameter est","Jackknife est.","Jackkinfe SE","Jackknife 2.5%","Jackknife 97.5%")     
+         CDD.summary.P<<-data.frame(Parameter=rownames(CDD.summary),CDD.summary) 
+         par(mfrow=c(2,2))
+         plot(ID.list,as.numeric(as.character(CDD.tot$CS)),type='n',xlab="ID",ylab="Cook's distance")
+         text(ID.list,as.numeric(as.character(CDD.tot$CS)),as.character(ID.list))
+         plot(ID.list,as.numeric(as.character(CDD.tot$CR)),type='n',xlab="ID",ylab="Cov Ratio")
+         text(ID.list,as.numeric(as.character(CDD.tot$CR)),as.character(ID.list))
+         abline(h=1,col=2)
+         plot(as.numeric(as.character(CDD.tot$CS)),as.numeric(as.character(CDD.tot$CR)),type='n',xlab="Cook's distance",ylab="Cov Ratio")
+         text(as.numeric(as.character(CDD.tot$CS)),as.numeric(as.character(CDD.tot$CR)),as.character(ID.list))         
+         abline(h=1,col=2)
+         g1<-gwindow("Case deletion summary")         
+         gtable(CDD.summary.P,cont=g1)         
+      }
+
+      openControl<-function(h,...)
+      {  control.file<-gfile(text="Open control file(runnumber subfolder)",type="open")
+         current.ctl<<-readLines(control.file)
+         svalue(control.t)<-control.file
+         temp<-strsplit(control.file,split="\\\\")[[1]]
+         CDD.RUN<-temp[length(temp)]
+         setwd(strsplit(control.file,split=CDD.RUN)[[1]])
+         CDD.RUN<<-strsplit(CDD.RUN,split="\\.")[[1]][1]
+      }
+ 
+      opendata<-function(h,...)
+      {  data.file<<-gfile(text="Open data file(runnumber subfolder)",type="open")
+         D.data<<-read.csv(data.file,na.string=".")
+         svalue(data.t)<-data.file
+      }
+ 
+      save1<-function(h,...)
+      {  write.csv(CDD.tot,paste(gfile(text="Save case deletion raw data as csv",
+              type="save",filter=list("csv files"=list(patterns=c("*.csv")))),".csv",sep=""),row.names=F)
+      }
+
+      save2<-function(h,...)
+      {  write.csv(CDD.summary.P,paste(gfile(text="Save case deletion summary data as csv",
+              type="save",filter=list("csv files"=list(patterns=c("*.csv")))),".csv",sep=""),row.names=F)
+      }
+     
+      load1<-function(h,...)
+      {  CDD.filename<-gfile("Open case deletion raw data file",type="open")
+         CDD.tot<-read.csv(CDD.filename)
+         CDD.res<-gfile("Open runnumber.RES file",type="open")
+         D.LST1<-readLines(CDD.res)
+         EST<-select.EST(D.LST1)   
+         COV<-select.COV(D.LST1)
+         OBJ<-select.OBJ(D.LST1)         
+         EST.tot<-c(EST$TH,EST$OMEGA,EST$SIGMA)
+         EST.CDD<-CDD.tot[,(1:length(EST.tot))+4]
+         n.TH<-length(EST$TH)
+         var.name<-tolower(colnames(D.data))
+         ID.id<-which(var.name=="x.id")
+           
+         ID.list<-unique(D.data[,ID.id])
+         N<-length(ID.list)      
+
+         bias<-(N-1)*(apply(EST.CDD,2,function(x) mean(as.numeric(as.character(x))))-EST.tot)
+         Jack.est<-N*EST.tot-(N-1)/N*apply(EST.CDD,2,function(x) sum(as.numeric(as.character(x))))
+         Jack.var<-sqrt(((N*EST.tot-Jack.est)^2)/(N-1)-2*(N*EST.tot-Jack.est)*apply(EST.CDD,2,function(x) sum(as.numeric(as.character(x))))/N+
+                     (N-1)/N*apply(EST.CDD,2,function(x) sum(as.numeric(as.character(x))^2)))
+         Jack.L<-EST.tot-qt(0.975,N-1)*sqrt(Jack.var)
+         Jack.U<-EST.tot+qt(0.975,N-1)*sqrt(Jack.var)
+         CDD.summary<-cbind(bias,EST.tot,Jack.est,Jack.var,Jack.L,Jack.U)   
+         colnames(CDD.summary)<-c("Bias","Parameter est","Jackknife est.","Jackkinfe SE","Jackknife 2.5%","Jackknife 97.5%")     
+         CDD.summary.P<<-data.frame(Parameter=rownames(CDD.summary),CDD.summary) 
+         par(mfrow=c(2,2))
+         plot(ID.list,as.numeric(as.character(CDD.tot$CS)),type='n',xlab="ID",ylab="Cook's distance")
+         text(ID.list,as.numeric(as.character(CDD.tot$CS)),as.character(ID.list))
+         plot(ID.list,as.numeric(as.character(CDD.tot$CR)),type='n',xlab="ID",ylab="Cov Ratio")
+         text(ID.list,as.numeric(as.character(CDD.tot$CR)),as.character(ID.list))
+         abline(h=1,col=2)
+         plot(as.numeric(as.character(CDD.tot$CS)),as.numeric(as.character(CDD.tot$CR)),type='n',xlab="Cook's distance",ylab="Cov Ratio")
+         text(as.numeric(as.character(CDD.tot$CS)),as.numeric(as.character(CDD.tot$CR)),as.character(ID.list))         
+         abline(h=1,col=2)
+         g1<-gwindow("Case deletion summary")         
+         gtable(CDD.summary.P,cont=g1)         
+      }
+     
+      CDDwin<-gwindow("Case deletion diagnostics")
+      BigGroup<-ggroup(cont=CDDwin,horizontal=TRUE)
+      BBgroup<-ggroup(cont=BigGroup,horizontal=FALSE)
+ 
+      tmp<-gframe("",cont=BBgroup)
+      control.t<-gedit(" ",width=50)
+      button1<-gbutton("Open control file(runnumber subfolder)",handler=openControl)
+      add(tmp,button1)
+      add(tmp,control.t)
+
+      tmp<-gframe("",cont=BBgroup)
+      button2<-gbutton("Open data files(runnumber subfolder)",handler=opendata,width=20,height=10)
+      data.t<-gedit(" ",width=50)
+      add(tmp,button2)
+      add(tmp,data.t)
+            
+      Button<-gbutton("Start case deletion",handler=CDDcalc)
+
+      tmp=gframe("",container=BBgroup)
+      add(tmp,Button)
+
+      tmp<-gframe("",cont=BBgroup)
+      Button1<-gbutton("Save case deletion raw data as csv",handler=save1)
+      add(tmp,Button1)
+      tmp<-gframe("",cont=BBgroup)
+      Button2<-gbutton("Save case deletion summary data as csv",handler=save2)
+      add(tmp,Button2)
+      tmp<-gframe("",cont=BBgroup)
+      Button4<-gbutton("Load case deletion raw data",handler=load1)
+      add(tmp,Button4)
+      
+      tmp<-gframe("Formulae",cont=BBgroup,horizontal=FALSE)
+      glabel("bias = (N-1)*(mean(TH(-k))-TH) \n",cont=tmp)      
+      glabel("CS : Cook's distance(k) = sqrt((TH(-k)-TH)*COV(TH)^(-1)*(TH(-k)-TH)) : best=0 \n",cont=tmp)
+      glabel("CR : Cov ratio(k) = det(COV(TH))/det(COV(TH(-k))) : best=1\n",cont=tmp)
+      glabel("bias = (N-1)*(mean(TH(-k))-TH) \n",cont=tmp)      
+      glabel("Jackknife est. = sum(N*TH-(N-1)*TH(-k))/N\n",cont=tmp)
+      glabel("Jackknife SE = sqrt(sum((N*TH-(N-1)*TH(-k)-Jackknife est.)**2)/(N*N-N))\n",cont=tmp)
+      glabel("Jackknife 95% CI lower bound = Jackknife est. - qt(0.975,N-1)*Jackknife SE\n",cont=tmp)
+      glabel("Jackknife 95% CI upper bound = Jackknife est. + qt(0.975,N-1)*Jackknife SE\n",cont=tmp)
+     
+#      tmp<-gframe("",cont=BBgroup)
+#      Button3<-gbutton("Summary data from joined bootstrap raw data file (Prob,Obj,Min,COV,EST,SE)",handler=save3)
+#      add(tmp,Button3)   
+     add(BigGroup,ggraphics())
+     
+   }
+   #### cross validation  #############################################
+   CV<-function(h,...)
+   {
+      CVRUN.ctl<-function()
+      {  Current.CTL<-current.ctl
+         temp.CTL<-Current.CTL
+         temp<-strsplit(temp.CTL,split=" ")
+         indicator<-NULL
+         for(i in 1:length(temp))
+           indicator<-rbind(indicator,temp[[i]][1])
+         n.CTL<-length(temp.CTL)
+
+         id<-which(indicator=="$DATA")
+         temp.CTL[id]<-"$DATA RUN.csv"
+         CV.CTL<-temp.CTL
+         write.table(CV.CTL,"CV-RUN.ctl",quote=FALSE,row.names=FALSE,col.names=FALSE)
+      }
+      
+      CVTEST.ctl<-function()
+      {  Current.CTL<-current.ctl
+         temp.CTL<-Current.CTL
+         temp<-strsplit(temp.CTL,split=" ")
+         indicator<-NULL
+         for(i in 1:length(temp))
+           indicator<-rbind(indicator,temp[[i]][1])
+         n.CTL<-length(temp.CTL)
+
+         id<-which(indicator=="$DATA")
+         temp.CTL[id]<-"$DATA TEST.csv"
+         id1<-which(indicator=="$THETA")
+         id2<-which(indicator=="$OMEGA")
+         id3<-which(indicator=="$SIGMA")
+         id4<-which(indicator=="$ESTIMATION")
+         id5<-which(indicator=="$TABLE")
+         if((id2-id1-1) > length(EST$TH))
+         {  for(i in 1:length(EST$TH))
+              temp.CTL[id1+i]<-paste(RUN.EST$TH[i], "  FIX",sep="")        
+            if((id1+i+1)<=(id2[1]-1))
+               temp.CTL[(id1+i+1):(id2[1]-1)]<-" "  
+         } 
+         
+#         temp.T<-paste("$OMEGA BLOCK(",length(RUN.EST$TH),")",sep="")
+#         for(i in 1:length(RUN.EST$OMEGA))
+#           temp.T<-paste(temp.T,RUN.EST$OMEGA[i],sep=" ")
+#         temp.T<-paste(temp.T," FIX",sep="")
+#         temp.CTL[id2[1]]<-temp.T
+#         for(i in (id2[1]+1):(id3-1))
+#           temp.CTL[i]<-" "  
+         OMEGA<-diag(RUN.EST$OMEGA.m)
+         temp.T<-"$OMEGA"
+         for(i in 1:length(OMEGA))
+           temp.T<-paste(temp.T,OMEGA[i], " FIX ",sep=" ")
+         temp.CTL[id2[1]]<-temp.T
+         for(i in (id2[1]+1):(id3-1))
+           temp.CTL[i]<-" "  
+
+         temp.T<-"$SIGMA "
+         for(i in 1:length(RUN.EST$SIGMA))
+           temp.T<-paste(temp.T,RUN.EST$SIGMA[i],sep=" ")
+         temp.T<-paste(temp.T," FIX",sep="")
+         temp.CTL[id3]<-temp.T
+         for(i in (id3+1):(id4[1]-1))
+           temp.CTL[i]<-" "  
+         temp.CTL[id4[1]]<-"$ESTIMATION MAXEVAL=0"
+         for(i in (id4[1]+1):(id5[1]-1))
+           temp.CTL[i]<-" "             
+         temp.CTL[id5[1]]<-"$TABLE ID TIME DV IPRED IWRES FILE=CVTEST.LST NOPRINT ONEHEADER"
+         temp.CTL<-temp.CTL[1:id5[1]]
+         CV.CTL<-temp.CTL       
+         write.table(CV.CTL,"CV-TEST.ctl",quote=FALSE,row.names=FALSE,col.names=FALSE)
+      }
+
+
+      CVcalc<-function(h,...)
+      {  
+         CVRUN.ctl()
+         K<<-as.numeric(svalue(CV.input))
+         var.name<-tolower(colnames(D.data))
+         ID.id<-which(var.name=="x.id")
+           
+         ID.list<-unique(D.data[,ID.id])
+         n<-length(ID.list)      
+         if(K < n)
+         {  n.rep<-floor(n/K)
+            CV.list<-sample(c(rep(c(1:K),n.rep),sample(1:K,(length(ID.list)-n.rep*K),replace=F)))
+         } else
+         {  CV.list<-sample(1:n,replace=F)         
+         }   
+         CV.n<-max(CV.list)
+         win<-gwindow(paste("Cross validation progress : K=",CV.n,sep=""),width=300,height=50)
+         CV.progress<-gslider(from=0,to=CV.n,by=1,value=0,cont=win)
+         D.LST<-readLines(paste(CV.RUN,".RES",sep=""))
+         EST<<-select.EST(D.LST)   
+         COV<-select.COV(D.LST)
+         OBJ<-select.OBJ(D.LST)
+         CV.tot<-NULL
+         for(k in 1:CV.n)
+         {  svalue(CV.progress)<-k
+            RUN.sample.id<-which(CV.list!=k)
+            TEST.sample.id<-which(CV.list==k)            
+            RUN.sample<-NULL
+            for(i in 1:length(RUN.sample.id))
+            {  id.temp<-which(D.data[,ID.id]==RUN.sample.id[i])
+               id.temp<-D.data[id.temp,]
+               id.temp$X.ID<-i
+               RUN.sample<-rbind(RUN.sample,id.temp)
+            }
+            TEST.sample<-NULL
+            for(i in 1:length(TEST.sample.id))
+            {  id.temp<-which(D.data[,ID.id]==TEST.sample.id[i])
+               id.temp<-D.data[id.temp,]
+               id.temp$X.ID<-i
+               TEST.sample<-rbind(TEST.sample,id.temp)
+            }
+            write.table(TEST.sample,"TEST.csv",quote=FALSE,row.names=FALSE,col.names=FALSE,na=".",sep=",")            
+            write.table(RUN.sample,"RUN.csv",quote=FALSE,row.names=FALSE,col.names=FALSE,na=".",sep=",")
+            CV.command<-paste(Default.NMpath," CV-RUN.CTL CV-RUN.RES")
+            system(CV.command,invisible=F,show.output.on.console=F)   
+            
+            D.LST<<-readLines("CV-RUN.RES")
+            D.temp<-readLines("CV-RUN.RES")
+            RUN.EST<<-select.EST(D.temp)   
+            RUN.COV<-select.COV(D.temp)
+            RUN.SE<-select.SE(D.temp)            
+            RUN.OBJ<-select.OBJ(D.temp)
+            TH.temp<-as.matrix(RUN.EST$TH-EST$TH)
+            COV.temp<-COV[1:length(TH.temp),1:length(TH.temp)]
+            RUNCOV.temp<-RUN.COV[1:length(TH.temp),1:length(TH.temp)]
+            CS<-t(TH.temp)%*%solve(COV.temp)%*%(TH.temp)
+            CR<-det(COV.temp)/det(RUNCOV.temp) 
+            file.id<-CV.RUN  
+            AddInfo<-select.AddInfo(file.id)
+
+            
+# PE °è»ê
+# MDWR / MDAWR / MAWR / MWR 
+            CVTEST.ctl()
+            CV.command<-paste(Default.NMpath," CV-TEST.CTL CV-TEST.RES")
+            system(CV.command,invisible=F,show.output.on.console=F)   
+            CVtest.result<-read.table("CVTEST.LST",skip=1,header=T)
+            PE<-(CVtest.result$DV-CVtest.result$IPRED)/CVtest.result$IPRED*100
+            PE<-PE[CVtest.result$IPRED!=0]
+            MDAWR<-median(abs(PE),na.rm=T)
+            MDWR<-median(PE,na.rm=T)
+            MAWR<-mean(abs(PE),na.rm=T)
+            MWR<-mean(PE,na.rm=T)      
+            RMSWR<-sqrt(mean((PE)^2,na.rm=T))    
+
+            result<-c(k,AddInfo[c(5,3,4)],c(RUN.EST$TH),c(RUN.EST$OMEGA),c(RUN.EST$SIGMA),
+                      c(RUN.SE$TH),c(RUN.SE$OMEGA),c(RUN.SE$SIGMA),CS,CR,MDAWR,MDWR,MAWR,MWR,RMSWR)   
+            CV.tot<-rbind(CV.tot,result)    
+            CV.tot.t<<-CV.tot          
+         }
+         omega.name.m<-outer(1:nrow(EST$OMEGA.m),1:nrow(EST$OMEGA.m),function(x,y) paste("OM",x,y,sep=""))
+         omega.name.m[lower.tri(omega.name.m,diag=TRUE)]
+         colnames(CV.tot)<-c("k","OBJ","MIN","COV", names(RUN.EST$TH),
+                       omega.name.m[upper.tri(omega.name.m,diag=TRUE)],names(RUN.EST$SIGMA),
+                       paste("SE-",c(names(RUN.EST$TH),omega.name.m[lower.tri(omega.name.m,diag=TRUE)],names(RUN.EST$SIGMA)),sep=""),
+                       "CS","CR","MDAWR","MDWR","MAWR","MWR","RMSWR") 
+         CV.tot<-data.frame(CV.tot)
+         CV.tot<<-CV.tot
+
+         dispose(win)
+         EST.tot<-c(EST$TH,EST$OMEGA,EST$SIGMA)
+         EST.CV<-CV.tot[,(1:length(EST.tot))+4]
+         n.TH<-length(RUN.EST$TH)
+         N<-length(ID.list)
+         bias<-(N-1)*(apply(EST.CV,2,function(x) mean(as.numeric(as.character(x))))-EST.tot)
+#         Jack.est<-N*EST.tot-(N-1)/N*apply(EST.CV,2,function(x) sum(as.numeric(as.character(x))))
+#         Jack.var<-((N*EST.tot-Jack.est)^2)/(N-1)-2*(N*EST.tot-Jack.est)*apply(EST.CV,2,function(x) sum(as.numeric(as.character(x))))/N+
+#                     (N-1)/N*apply(EST.CV,2,function(x) sum(as.numeric(as.character(x))^2))
+#         Jack.L<-EST.tot-qt(0.975,N-1)*sqrt(Jack.var)
+#         Jack.U<-EST.tot+qt(0.975,N-1)*sqrt(Jack.var)
+         MDAWR.t<-mean(CV.tot$MDAWR)
+         MDWR.t<-mean(CV.tot$MDWR)
+         MWR.t<-mean(CV.tot$MWR)
+         RMSWR.t<-mean(CV.tot$RMSWR)
+         n.last<-n.TH+length(RUN.EST$SIMGA)+length(omega.name.m[lower.tri(omega.name.m,diag=TRUE)])-1
+         EST.CV.tot<-apply(matrix(as.numeric(as.character(unlist(
+                            CV.tot[,5:(5+n.last)]))),nrow=nrow(CV.tot)),2,mean)
+         names(EST.CV.tot)<-colnames(CV.tot)[5:(5+n.last)]
+         CV.summary<-cbind(bias,EST.CV.tot,EST.tot)     
+         colnames(CV.summary)<-c("Bias","CV parameter est.","Parameter est")     
+         CV.summary.P<<-data.frame(parameter=rownames(CV.summary),CV.summary) 
+         
+         g1<-gwindow("Cross validation summary")         
+         gtable(CV.summary.P,cont=g1)                 
+      }
+      
+      
+
+      openControl<-function(h,...)
+      {  control.file<-gfile(text="Open control file(runnumber subfolder)",type="open")
+         current.ctl<<-readLines(control.file)
+         svalue(control.t)<-control.file
+         temp<-strsplit(control.file,split="\\\\")[[1]]
+         CV.RUN<-temp[length(temp)]
+         setwd(strsplit(control.file,split=CV.RUN)[[1]])
+         CV.RUN<<-strsplit(CV.RUN,split="\\.")[[1]][1]
+      }
+ 
+      opendata<-function(h,...)
+      {  data.file<<-gfile(text="Open data file(runnumber subfolder)",type="open")
+         D.data<<-read.csv(data.file,na.string=".")
+         svalue(data.t)<-data.file
+      }
+ 
+      save1<-function(h,...)
+      {  write.csv(CV.tot,paste(gfile(text="Save cross validation raw data as csv",
+              type="save",filter=list("csv files"=list(patterns=c("*.csv")))),".csv",sep=""),row.names=F)
+      }
+
+      save2<-function(h,...)
+      {  write.csv(CV.summary.P,paste(gfile(text="Save cross validation summary data as csv",
+              type="save",filter=list("csv files"=list(patterns=c("*.csv")))),".csv",sep=""),row.names=F)
+      }
+     
+      load1<-function(h,...)
+      {  CV.filename<-gfile("Open case deletion raw data file",type="open")
+         CV.tot<-read.csv(CV.filename)
+         CV.res<-gfile("Open runnumber.RES file",type="open")
+         D.LST1<-readLines(CV.res)
+         EST<-select.EST(D.LST1)   
+         COV<-select.COV(D.LST1)
+         OBJ<-select.OBJ(D.LST1)         
+         EST.tot<-c(EST$TH,EST$OMEGA,EST$SIGMA)
+         EST.CV<-CV.tot[,(1:length(EST.tot))+4]
+         n.TH<-length(EST$TH)
+         var.name<-tolower(colnames(D.data))
+         ID.id<-which(var.name=="x.id")           
+         ID.list<-unique(D.data[,ID.id])         
+         N<-length(ID.list)
+         bias<-(N-1)*(apply(EST.CV,2,function(x) mean(as.numeric(as.character(x))))-EST.tot)
+#         Jack.est<-N*EST.tot-(N-1)/N*apply(EST.CV,2,function(x) sum(as.numeric(as.character(x))))
+#         Jack.var<-((N*EST.tot-Jack.est)^2)/(N-1)-2*(N*EST.tot-Jack.est)*apply(EST.CV,2,function(x) sum(as.numeric(as.character(x))))/N+
+#                     (N-1)/N*apply(EST.CV,2,function(x) sum(as.numeric(as.character(x))^2))
+#         Jack.L<-EST.tot-qt(0.975,N-1)*sqrt(Jack.var)
+#         Jack.U<-EST.tot+qt(0.975,N-1)*sqrt(Jack.var)
+         MDAWR.t<-mean(CV.tot$MDAWR)
+         MDWR.t<-mean(CV.tot$MDWR)
+         MWR.t<-mean(CV.tot$MWR)
+         RMSWR.t<-mean(CV.tot$RMSWR)
+         n.last<-length(bias)-1
+         EST.CV.tot<-apply(matrix(as.numeric(as.character(unlist(
+                            CV.tot[,5:(5+n.last)]))),nrow=nrow(CV.tot)),2,mean)
+         names(EST.CV.tot)<-colnames(CV.tot)[5:(5+n.last)]
+         CV.summary<-cbind(bias,EST.CV.tot,EST.tot)     
+         colnames(CV.summary)<-c("Bias","CV parameter est.","Parameter est")     
+         CV.summary.P<<-data.frame(parameter=rownames(CV.summary),CV.summary) 
+         
+         g1<-gwindow("Cross validation summary")         
+         gtable(CV.summary.P,cont=g1)                 
+        }
+     
+      CVwin<-gwindow("Cross-validation")
+      BBgroup<-ggroup(cont=CVwin,horizontal=FALSE)
+ 
+      tmp<-gframe("",cont=BBgroup)
+      control.t<-gedit(" ",width=50)
+      button1<-gbutton("Open control file(runnumber subfolder)",handler=openControl)
+      add(tmp,button1)
+      add(tmp,control.t)
+
+      tmp<-gframe("",cont=BBgroup)
+      button2<-gbutton("Open data files(runnumber subfolder)",handler=opendata,width=20,height=10)
+      data.t<-gedit(" ",width=50)
+      add(tmp,button2)
+      add(tmp,data.t)
+  
+      tmp=gframe("Number of subgroups",container=BBgroup)
+      CV.label<-glabel("# of subgroups")
+      CV.input<-gedit("10",width=10)
+      add(tmp,CV.label)
+      add(tmp,CV.input)
+            
+      Button<-gbutton("Start cross-validation",handler=CVcalc)
+
+      tmp=gframe("",container=BBgroup)
+      add(tmp,Button)
+
+      tmp<-gframe("",cont=BBgroup)
+      Button1<-gbutton("Save cross-validation raw data as csv",handler=save1)
+      add(tmp,Button1)
+      tmp<-gframe("",cont=BBgroup)
+      Button2<-gbutton("Save cross-validation summary data as csv",handler=save2)
+      add(tmp,Button2)
+      tmp<-gframe("",cont=BBgroup)
+      Button4<-gbutton("Load cross-validation raw data",handler=load1)
+      add(tmp,Button4)
+      
+#      tmp<-gframe("",cont=BBgroup)
+#      Button3<-gbutton("Summary data from joined bootstrap raw data file (Prob,Obj,Min,COV,EST,SE)",handler=save3)
+#      add(tmp,Button3)   
+   }  
    ############################################################################# 
    # NONMEM help
    #############################################################################
@@ -5983,6 +6915,7 @@ fit4NM<-function()
       file.copy(data.file,paste(new.dir,"/",runID,".csv",sep=""),overwrite=T)
       setwd(new.dir)
       NM.command<-paste(Default.NMpath, paste(runID,".ctl",sep=""),paste(runID,".res",sep=""))
+      write.table(" ",paste(runID,".res",sep=""))
       system(NM.command,invisible=F,show.output.on.console=F)
       temp.LST<-readLines(paste(runID,".res",sep=""))
       AA<<-temp.LST
@@ -6249,6 +7182,56 @@ fit4NM<-function()
       return(Est)  
    }  
    
+   select.AddInfo<-function(file.id)
+   {  n.lst<-length(D.LST)
+      Date<-D.LST[n.lst-1]
+      Time<-D.LST[n.lst]
+
+      D.temp<-matrix(D.LST)
+      indicator<-apply(D.temp,1,function(x) strsplit(x,split=" ")[[1]][1])
+      min.id<- which(indicator=="0MINIMIZATION")
+      min.id<-min.id[length(min.id)]
+      Min<-strsplit(D.LST[min.id],split=" ")[[1]][2]
+      param.num<- select.n.param(D.LST)
+      data.n<-select.N(read.csv(paste(file.id,".csv",sep="")))
+      indicator<-apply(D.temp,1,function(x) strsplit(x,split=":")[[1]][1])
+      cond.id<-grep(" EIGENVALUES ",D.LST)
+      if(length(cond.id)!=0)
+      {  
+         flag<-T
+         id.current<-cond.id+5
+         cond.line<-0
+         while(flag)
+         {  ttemp<-D.LST[id.current]
+            flag<-ttemp!=" "
+            if(flag)
+            {  cond.line<-cond.line+1
+               id.current<-id.current+1
+            }
+         }
+         temp<-NULL
+         for(i in 1:cond.line)
+            temp<-c(temp,strsplit(D.LST[cond.id+5+cond.line+i],split=" ")[[1]])
+         temp<-as.numeric(temp[temp!=""&temp!="+"])
+         cond.num<-round(max(temp)/min(temp),3)        
+      } else
+      {  cond.num<-NA
+      }   
+      
+      Obj<- select.OBJ(D.LST)
+      AIC<-Obj+2*param.num
+      AICc<-round(Obj+2*param.num+2*param.num*(param.num+1)/(data.n-param.num-1),3)
+      SBC<-round(Obj+param.num*log(data.n),3)
+      COV.THETA<-select.COV(D.LST)    
+      if(sum(is.na(COV.THETA))!=0)
+      {  COV<-"NONE"
+         cond.num<-NA
+      } else
+      {  COV<-"OK"
+      }  
+      temp<-c(Date,Time,Min,COV,Obj,AIC,AICc,SBC,cond.num,param.num)
+      return(temp)   
+   }
       
    ############################################################################# 
    # Program information
@@ -6256,19 +7239,19 @@ fit4NM<-function()
    PI<-function(h,...)
    {  gmessage("*** Program information ***
                 \n\"fit4NM\" stands for \"Fit for NONMEM\".
-                \nEun-Kyung Lee, Ph.D. 
+                \nEun-Kyung Lee, Ph.D. (lee.eunk@ewha.ac.kr)
                 \n         Assistant Professor
                 \n         Department of Statistics
                 \n         Ewha Womans University
                 \n         Seoul, Korea.
-                \nGyujeong Noh, M.D. & Ph.D.
+                \nGyujeong Noh, M.D. & Ph.D. (gyujeong.noh@gmail.com)
                 \n         Professor
                 \n         Department of Clinical Pharmacology and Therapeutics
                 \n         Department of Anesthesiology and Pain Medicine
                 \n         Asan Medical Center
                 \n         University of Ulsan College of Medicine
                 \n         Seoul, Korea.
-                \nVersion: 3.2.1 (Feb. 12, 2011)",cont=TRUE,width=600)   
+                \nVersion: 3.3.0 (Mar. 1, 2011)",cont=TRUE,width=600)   
    }
 
    ############################################################################# 
@@ -6302,7 +7285,14 @@ fit4NM<-function()
                                       'Join data'=list(handler=DataJoinhandler),
                                       'Split data'=list(handler=DataSplit),                                     
                                       'Convert data'=list('Column to line'=list(handler=ColtoLine),
-                                                          'Line to column'=list(handler=LinetoCol))                                                                                                                 
+                                                          'Line to column'=list(handler=LinetoCol)),
+                                      'Biosignal data preparation'
+                                              =list('Selection'
+                                                       =list('Batch process'=list(handler=BDS.batch),
+                                                             'Individual process'=list(handler=BDS.indiv)),                                                         
+                                                    'Central moving average'       
+                                                       =list('Batch process'=list(handler=BDS.smooth.batch),
+                                                             'Individual process'=list(handler=BDS.smooth)))                                                                                                                                                                                                                               
                                      ),
                             'NONMEM data'=
                                 list('Notes before NONMEM data creation'=list(handler=dataNotes),
@@ -6332,8 +7322,7 @@ fit4NM<-function()
                             'Run'=list('Notes before run'=list(handler=BeforeRun),
                                         'From default editor'=list(handler=Editor),
                                         'From external editor'=list(handler=ExternalRun),
-                                        'Direct run'=list(handler=DirectRun)), 
-                            'Wald approximation method'=list(handler=WaldApprox),                                         
+                                        'Direct run'=list(handler=DirectRun)),                                                                  
                             'Explore output'=
                                  list('Select output data' = list(handler=outputselect),
                                       'View run summary' = list(handler=showRES), 
@@ -6345,19 +7334,22 @@ fit4NM<-function()
                                                   'RES vs TIME'=list(handler=TIMEvsRES.plot),                  
                                                   'Predictions and DV vs TIME'=list(handler=TIMEvsDVandPRED.plot),
                                                   'Predictions and DV vs TIME by ID'=list(handler=TIMEvsDVandPREDID.plot),                                                 
-                                                  'Covariate vs parameter'=list(handler=EBEvsCOV.plot))
+                                                  'Covariate vs parameter'=list(handler=EBEvsCOV.plot)),
+                                      'Covariate search'=list('Wald approximation method'=list(handler=WaldApprox),                                  
+                                                  'Randomization test'=list(handler=RandomTest))                                                
                                       ),                                                 
                             'Explore simulated data'=list(handler=simulationD), 
                             'Convert PK parameters'=list(handler=PKparam.converter),                                                                                                                                                           
                             'Open R terminal for xpose'=list(handler=OpenXpose)
                            ),
                    'Model evaluations'=
-                       list('Notes before model evaluations'=list(handler=VPCNote),  
-                            'Randomization test'=list(handler=RandomTest),                     
+                       list('Notes before model evaluations'=list(handler=VPCNote),                                                  
                             'Predictive checks'=list(handler=VPC1GUI),
-                            'Bootstrap'=list(handler=Boot),
-                            'Log-likelihood profiling'=list(handler=LLprofiling),                            
-                            'External validation of TCI'=  list(handler=Performance.CCIP)
+                            'Bootstrap'=list(handler=Boot),                            
+                            'Case deletion / Jackkinfe diagnostics'=  list(handler=CDD),   
+                            'Log-likelihood profiling'=list(handler=LLprofiling),                              
+                            'Cross validation'=  list(handler=CV),                                                                                     
+                            'External validation of TCI'=  list(handler=Performance.CCIP)                         
                            ),   
                                                
                    'NONMEM help'=list('Open default help'=list(handler=Help1),
