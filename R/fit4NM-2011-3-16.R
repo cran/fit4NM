@@ -89,6 +89,26 @@ fit4NM<-function()
          dir.name<-strsplit(standard.file,split=file.id)[[1]]
          setwd(dir.name)
          svalue(standard.t)<-standard.file
+         ref.data<-read.csv(standard.file)
+         ind.list<-colnames(ref.data)
+         tmp<-gframe("",cont=BBgroup,height=50)
+         button4<-gbutton("Select indicator",width=20,height=10)
+         add(tmp,button4)
+         indc.t<<-gdroplist(c("NONE",ind.list),width=200,height=200)
+         add(tmp,indc.t)        
+         tmp<-gframe("",cont=BBgroup)
+         button2<-gbutton("Select data folder #ID, DATE (yyyy-mm-dd), TIME (h:mm:ss),... after data split by ID",handler=openIndiv1,width=20,height=10)
+         add(tmp,button2)
+         indiv.t<<-gdroplist(c(" "),width=200,height=200)
+         add(tmp,indiv.t)
+         tmp<-gframe("",cont=BBgroup,height=50)
+         button4<-gbutton("Select time unit",width=20,height=10)
+         add(tmp,button4)
+         time.t<<-gdroplist(c("secs","mins","hours","days","weeks"),width=200,height=200)
+         add(tmp,time.t)
+         tmp<-gframe("",cont=BBgroup)
+         button3<-gbutton("Calculate and save as csv",handler=ElapseTime,width=20,height=10)
+         add(tmp,button3)         
       }
       
       openIndiv1<-function(h,...)
@@ -100,10 +120,12 @@ fit4NM<-function()
       }
   
       ElapseTime<-function(h,...)
-      {  setTIME<-svalue(standard.t)
+      {       
+         setTIME<-svalue(standard.t)
          setDIR<-indiv.dir 
          UNIT<-svalue(time.t)
-         New.Time<-CalcTIME0(setTIME,setDIR,UNIT)
+         ind.VAR<-svalue(indc.t)
+         New.Time<-CalcTIME0(setTIME,setDIR,UNIT,ind.VAR)
          temp<-gfile(text="Save calculated elapsed time as csv",
            type="save") #,filter=list("csv files"=list(patterns=c("*.csv"))))
          file.name<-strsplit(temp,split="\\.")[[1]][1]
@@ -111,25 +133,48 @@ fit4NM<-function()
          dispose(timewin1)  
       }
 
-      CalcTIME0<-function(setTIME,setDIR,UNIT)
+      CalcTIME0<-function(setTIME,setDIR,UNIT,ind.VAR)
       {  file.list<-dir(setDIR)
          setTIME<-read.csv(standard.file)
          tot.data<-NULL
          for(i in 1:length(file.list))
-         {  data.t<-read.csv(paste(setDIR,"\\",file.list[i],sep=""))
-            if( sum(setTIME$X.ID==data.t$X.ID[1])!=0)
-            {  orig.colname<-colnames(data.t)
-               colnames(data.t)<-toupper(orig.colname)
-               DATETIME<-paste(data.t$DATE,data.t$TIME,sep=" ")
-               data.temp<-strptime(DATETIME,"%Y-%m-%d %H:%M:%S")
-               standard<-paste(as.character(setTIME$DATE0[setTIME$X.ID==data.t$X.ID[1]]),
-                       as.character(setTIME$TIME0[setTIME$X.ID==data.t$X.ID[1]]),sep=" ")
-               TIME<-as.numeric(difftime(strptime(data.temp,"%Y-%m-%d %H:%M:%S"),
-                       strptime(standard,"%Y-%m-%d %H:%M:%S"), units=UNIT))
-               data.t$TIME<-TIME
-               data.t<-data.t[,-which(toupper(orig.colname)=="DATE")]
-               colnames(data.t)<-orig.colname[-which(toupper(orig.colname)=="DATE")]
-               tot.data<-rbind(tot.data,data.t)
+         {  data.tt<-read.csv(paste(setDIR,"\\",file.list[i],sep=""))
+            if(ind.VAR!="NONE")
+            {  ind.list<-names(table(data.tt[,ind.VAR]))
+               for(j in 1:length(ind.list))
+               {  sel.ind<-which(as.character(data.tt[,ind.VAR])==ind.list[j])
+                  data.t<-data.tt[sel.ind,]
+                  if( sum(setTIME$X.ID==data.t$X.ID[1] )!=0)
+                  {  orig.colname<-colnames(data.t)
+                     colnames(data.t)<-toupper(orig.colname)
+                     DATETIME<-paste(data.t$DATE,data.t$TIME,sep=" ")
+                     data.temp<-strptime(DATETIME,"%Y-%m-%d %H:%M:%S")
+                     standard<-paste(as.character(setTIME$DATE0[setTIME$X.ID==data.t$X.ID[1] & setTIME[,ind.VAR]==ind.list[j]]),
+                             as.character(setTIME$TIME0[setTIME$X.ID==data.t$X.ID[1]& setTIME[,ind.VAR]==ind.list[j]]),sep=" ")
+                     TIME<-as.numeric(difftime(strptime(data.temp,"%Y-%m-%d %H:%M:%S"),
+                             strptime(standard,"%Y-%m-%d %H:%M:%S"), units=UNIT))
+                     data.t$TIME<-TIME
+                     data.t<-data.t[,-which(toupper(orig.colname)=="DATE")]
+                     colnames(data.t)<-orig.colname[-which(toupper(orig.colname)=="DATE")]
+                     tot.data<-rbind(tot.data,data.t)
+                  }
+               }        
+            } else
+            {  data.t<-data.tt
+               if( sum(setTIME$X.ID==data.t$X.ID[1])!=0)
+               {  orig.colname<- colnames(data.t)
+                  colnames(data.t)<-toupper(orig.colname)
+                  DATETIME<-paste(data.t$DATE,data.t$TIME,sep=" ")
+                  data.temp<-strptime(DATETIME,"%Y-%m-%d %H:%M:%S")
+                  standard<-paste(as.character(setTIME$DATE0[setTIME$X.ID==data.t$X.ID[1]]),
+                          as.character(setTIME$TIME0[setTIME$X.ID==data.t$X.ID[1]]),sep=" ")
+                  TIME<-as.numeric(difftime(strptime(data.temp,"%Y-%m-%d %H:%M:%S"),
+                          strptime(standard,"%Y-%m-%d %H:%M:%S"), units=UNIT))
+                  data.t$TIME<-TIME
+                  data.t<-data.t[,-which(toupper(orig.colname)=="DATE")]
+                  colnames(data.t)<-orig.colname[-which(toupper(orig.colname)=="DATE")]
+                  tot.data<-rbind(tot.data,data.t)
+               }   
             }   
          }
          ID.sort<-sort.list(tot.data$X.ID)
@@ -141,26 +186,13 @@ fit4NM<-function()
       }
 
       timewin1<<-gwindow("Caclulate elapsed time")
-      BBgroup<-ggroup(cont=timewin1,horizontal=FALSE)
-      Bgroup1<-ggroup(cont=BBgroup,horizontal=TRUE)
+      BBgroup<<-ggroup(cont=timewin1,horizontal=FALSE)
+      Bgroup1<<-ggroup(cont=BBgroup,horizontal=TRUE)
       tmp<-gframe("",cont=BBgroup)
       standard.t<-gedit(" ",width=50)
       button1<-gbutton("Open reference time file #ID, DATE0 (yyyy-mm-dd), TIME0 (h:mm:ss)",handler=openStandard)
       add(tmp,button1)
       add(tmp,standard.t)
-      tmp<-gframe("",cont=BBgroup)
-      button2<-gbutton("Select data folder #ID, DATE (yyyy-mm-dd), TIME (h:mm:ss),... after data split by ID",handler=openIndiv1,width=20,height=10)
-      add(tmp,button2)
-      indiv.t<-gdroplist(c(" "),width=200,height=200)
-      add(tmp,indiv.t)
-      tmp<-gframe("",cont=BBgroup,height=50)
-      button4<-gbutton("Select time unit",width=20,height=10)
-      add(tmp,button4)
-      time.t<-gdroplist(c("secs","mins","hours","days","weeks"),width=200,height=200)
-      add(tmp,time.t)
-      tmp<-gframe("",cont=BBgroup)
-      button3<-gbutton("Calculate and save as csv",handler=ElapseTime,width=20,height=10)
-      add(tmp,button3)
    }
 
    ###### Join data ############################################################  
@@ -362,6 +394,11 @@ fit4NM<-function()
       gbutton("Open",handler=select.CL,cont=tmp)
    }
    ###### Biosignal data selection##############################################  
+   #### Notes before selection #############################################
+   BiosignalNotes<-function(h,...)
+   {  gmessage("*** Notes before biosignal data preparation ***
+                \nPlease use elapsed time instead of actual time.",cont=TRUE,width=600)   
+   }   
    ######## Batch process ######################################################  
    BDS.batch<-function(h,...)
    {
@@ -381,14 +418,14 @@ fit4NM<-function()
              var.name<-colnames(temp.tot)
              X.id<-which(var.name==svalue(BDS.list[[1]]))
              Y.id<-which(var.name==svalue(BDS.list[[2]]))
-             Y<-temp.tot[,X.id]
-             X<-temp.tot[,Y.id]
+             X<-temp.tot[,X.id]
+             Y<-temp.tot[,Y.id]
              N<-length(Y)
              diff.Y<-(Y[-1]-Y[-length(Y)])/(X[-1]-X[-length(X)])
              cut.rate<-as.numeric(svalue(sel.rate))/100
              cut.n<-round(N*cut.rate)
 
-             sel.id<-sort(sort.list(diff.Y)[-c(1:cut.n)])
+             sel.id<-sort(sort.list(abs(diff.Y),decreasing=T)[-c(1:cut.n)])
              select.flag<-rep(FALSE,length(X))
              select.flag[c(1,sel.id+1)]<-TRUE
              select.data<-cbind(temp.tot,select.flag)
@@ -423,7 +460,7 @@ fit4NM<-function()
          tmp=gframe("",container=BBgroup)
          add(tmp,Button2)
          tmp<-gframe("",container=BBgroup)
-         glabel("Difference[t] = (DV[t] - DV[t-1])/(TIME[t]-TIME[t-1]),discard DV[t] if difference[t] ranked in descending order > cutoff percentile",
+         glabel("Difference[t] = (DV[t] - DV[t-1])/(TIME[t]-TIME[t-1]),discard DV[t] if abs(difference[t]) ranked in descending order > cutoff percentile",
                    container=tmp)       
         
 #         add(BigGroup,ggraphics())
@@ -490,7 +527,7 @@ fit4NM<-function()
          tmp<-gframe("",container=BBgroup)
          add(tmp,Button3)
          tmp<-gframe("",container=BBgroup)
-         glabel("Difference[t] = (DV[t] - DV[t-1])/(TIME[t]-TIME[t-1]),discard DV[t] if difference[t] ranked in descending order > cutoff percentile",
+         glabel("Difference[t] = (DV[t] - DV[t-1])/(TIME[t]-TIME[t-1]),discard DV[t] if abs(difference[t]) ranked in descending order > cutoff percentile",
                    container=tmp)       
          
          flag.start<<-TRUE
@@ -557,14 +594,13 @@ fit4NM<-function()
           cut.rate<-as.numeric(svalue(sel.rate))/100
           cut.n<-round(N*cut.rate)
 
-          sel.id<-sort(sort.list(diff.Y)[-c(1:cut.n)])
+          sel.id<-sort(sort.list(abs(diff.Y),decreasing=T)[-c(1:cut.n)])
           select.flag.temp<-rep(FALSE,length(X.new))
           select.flag.temp[c(1,sel.id+1)]<-TRUE
           sel.FINAL[sel.NULL]<-select.flag.temp
           sel.FINAL<<-sel.FINAL          
           plot(X.new[sel.id],Y.new[sel.id],type='l',col=3,xlab="TIME",ylab="DV",main=paste("N=",length(sel.id),sep=""))
           NList[]<-rbind(NList[],c(iter.N,length(sel.id)))
-
       }      
     
       BDSwin<<-gwindow("Biosignal data : Selection : Individual processing")
@@ -1015,7 +1051,121 @@ fit4NM<-function()
       catcheck<-gcheckboxgroup(Var.Name,use.table=TRUE,cont=checkg)
       Button1<-gbutton("OK",type="OK",handler=saveCat,cont=checkg)
    }   
+   ######## Summary statistics-continuous by ID ################################
+   Summary.stat.ind<-function(h,...)
+   {  calc.summary<-function()
+      {  DA.data<-c(EDA.data[,Con.list])
+         if(length(Cat.list)==0)
+         {  Con.data<-as.matrix(EDA.data[,c("X.ID")]) 
+         } else
+         {  Con.data<-as.matrix(EDA.data[,c("X.ID",Cat.list)])
+         }
+         fp<-function(x)
+         { n<-length(x)
+           name<-x[1]
+           if(n>=2)
+             for(i in 2:n)
+               name<-paste(name,x[i],sep="-")
+           return(name)
+         }      
+         ID<-apply(Con.data,1,fp)
+         summary.stat1<-cbind(tapply(DA.data,ID,function(x) length(x[!is.na(x)])),
+         tapply(DA.data,ID,function(x) mean(x,na.rm=T)),
+         tapply(DA.data,ID,function(x) sd(x,na.rm=T)), 
+         tapply(DA.data,ID,function(x) min(x,na.rm=T)),
+         tapply(DA.data,ID,function(x) quantile(x,na.rm=T,probs=0.25)),
+         tapply(DA.data,ID,function(x) quantile(x,na.rm=T,probs=0.5)),
+         tapply(DA.data,ID,function(x) quantile(x,na.rm=T,probs=0.75)),
+         tapply(DA.data,ID,function(x) max(x,na.rm=T)))
+         colnames(summary.stat1)<-c("N","Mean","SD","Mininum","Q1","Median","Q3","Maximum")
+         summary.stat<-round(summary.stat1,3)
+         
+         cat.name<-matrix(unlist(strsplit(rownames(summary.stat1),split="-")),byrow=T,nrow=nrow(summary.stat))
+         if(length(Cat.list)==0)
+         {  colnames(cat.name)<-"ID"
+         } else
+         { colnames(cat.name)<-c("ID",Cat.list)
+         }
+         summary.stat<-cbind(cat.name,summary.stat)
+         savesummarydata<-function(h,...)
+         {  dir.name<-strsplit(EDAfileName,split="\\.")[[1]][1]
+            temp<-strsplit(dir.name,"\\\\")[[1]]    
+            dataname<-temp[length(temp)]
+            dir.name<-strsplit(dir.name,dataname)[[1]]
+            setwd(dir.name)
+            write.csv(summary.stat,paste(gfile(text="Save as csv",
+                 type="save",filter=list("csv files"=list(patterns=c("*.csv")))),".csv",sep=""),row.names=F)
+         }
+         summary.w<-gwindow(paste("Summary statistics by ID : ",Con.list ))
+         gsummary<-ggroup(cont=summary.w,horizontal=F)
+         summary.table<-gtable(summary.stat,do.subset=TRUE,cont=gsummary)
+         size(summary.table)<-c(20,200)
+         tmp<-gframe(cont=gsummary,spacing=10000)
+         Button1<-gbutton("Save",handler=savesummarydata,spacing=2000)
+         size(Button1)<-c(50,30)
+         add(tmp,Button1)
+      }
+
+      saveCat<-function(h,...)
+      {  Con.list<<-svalue(catcheck)
+         Cat.list<<-Var.Name[svalue(catcheck1)]
+         dispose(checkg)
+         calc.summary()
+      }
+
+      Var.Name<-colnames(EDA.data)[-1]
+      checkg<-gwindow("Summary statistics by ID")
+      tmp<-gframe("Select continuous variable", cont=checkg)      
+      catcheck<-gradio(Var.Name,use.table=TRUE,cont=tmp) 
+      gg<-ggroup(cont=checkg)
+      tmp<-gframe("Select categorical variables for levels", cont=gg,horizontal=FALSE)      
+      catcheck1<-gcheckboxgroup(Var.Name,use.table=TRUE)
+      size(catcheck1)<-c(200,300)
+      add(tmp,catcheck1)
+      Button1<-gbutton("OK",type="OK",handler=saveCat,cont=checkg)
+   }
    
+   ######## Summary statistics-categorical by ID ################################
+   Summary.stat.cat.ind<-function(h,...)
+   {  calc.summary<-function()
+      {  DA.data<-data.frame(EDA.data[,c(Con.list,"X.ID")])
+         sum.cat<-as.data.frame(table(DA.data))
+         p<-ncol(sum.cat)
+         summary.stat<-sum.cat[,c(p-1,1:(p-2),p)]
+         savesummarydata<-function(h,...)
+         {  dir.name<-strsplit(EDAfileName,split="\\.")[[1]][1]
+            temp<-strsplit(dir.name,"\\\\")[[1]]    
+            dataname<-temp[length(temp)]
+            dir.name<-strsplit(dir.name,dataname)[[1]]
+            setwd(dir.name)
+            write.csv(summary.stat,paste(gfile(text="Save as csv",
+                 type="save",filter=list("csv files"=list(patterns=c("*.csv")))),".csv",sep=""),row.names=F)
+         }
+         title.N<-"Summary table by ID :"
+         for(i in 1:length(Con.list))
+           title.N<-paste(title.N,Con.list[i])         
+         summary.w<-gwindow(title.N)
+         gsummary<-ggroup(cont=summary.w,horizontal=F)
+         summary.table<-gtable(summary.stat,do.subset=TRUE,cont=gsummary)
+         size(summary.table)<-c(20,200)
+         tmp<-gframe(cont=gsummary,spacing=10000)
+         Button1<-gbutton("Save",handler=savesummarydata,spacing=2000)
+         size(Button1)<-c(50,30)
+         add(tmp,Button1)
+      }
+
+      saveCat<-function(h,...)
+      {  Con.list<<-Var.Name[svalue(catcheck)]
+         dispose(checkg)
+         calc.summary()
+      }
+
+      Var.Name<-colnames(EDA.data)[-1]
+      checkg<-gwindow("Select categorical variables for summary statistics by ID")
+      catcheck<-gcheckboxgroup(Var.Name,use.table=TRUE,cont=checkg)
+      Button1<-gbutton("OK",type="OK",handler=saveCat,cont=checkg)
+   }   
+        
    ######## Summary statistics-categorical-single level per person #############  
    Summary.cat<-function(h,...)
    {  saveCat<-function(h,...)
@@ -4136,7 +4286,11 @@ fit4NM<-function()
 
       CalcSIM<-function(h,...)
       {  SIM.win<-gwindow("Summaries of Simulation progress",width=300,height=50)
-         SIM.progress<-gslider(from=0,to=100,by=1,value=0,cont=SIM.win)
+         Bgroup<-ggroup(cont=SIM.win,horizontal=FALSE)
+         SIM.progress<-gslider(from=0,to=100,by=1,value=0,cont=Bgroup)
+         tmp<-gframe("Read line",cont=Bgroup)
+         SIM.line<-gedit(" ",width=50)
+         add(tmp,SIM.line)
          svalue(SIM.progress)<-0
          n.sim<-as.numeric(svalue(N.g1))
          flag<-TRUE
@@ -4169,17 +4323,28 @@ fit4NM<-function()
 
             ID.list<-which(round(D.data[,"TIME"],3)==TIME.id[i]); NN<-NN+length(ID.list)
             con<-file(SIM.file,"r")
+            Line<-0
             TT<-list()
+            Line<-Line+1+ID.list[1]
+            svalue(SIM.line)<-Line
             temp<-scan(con,skip=1+ID.list[1],nlines=1,quiet=TRUE)
             if(length(ID.list)>1)
             {  for(ki in 2:length(ID.list))
+               {  Line<-Line+ID.list[ki]-ID.list[ki-1]
+                  svalue(SIM.line)<-Line                
                   temp<-rbind(temp,scan(con,skip=ID.list[ki]-ID.list[ki-1]-1,nlines=1,quiet=TRUE))
+               }   
             }
             for(k in 2:n.sim)
-            {  temp<-rbind(temp,scan(con,skip=(n.data+1)-ID.list[length(ID.list)]+ID.list[1],nlines=1,quiet=TRUE))
+            {  Line<-Line+(n.data+1)-ID.list[length(ID.list)]+ID.list[1]+1
+               svalue(SIM.line)<-Line
+               temp<-rbind(temp,scan(con,skip=(n.data+1)-ID.list[length(ID.list)]+ID.list[1],nlines=1,quiet=TRUE))
                if(length(ID.list)>1)
                {  for(ki in 2:length(ID.list))
-                   temp<-rbind(temp,scan(con,skip=ID.list[ki]-ID.list[ki-1]-1,nlines=1,quiet=TRUE))
+                  {  Line<-Line+ID.list[ki]-ID.list[ki-1]
+                     svalue(SIM.line)<-Line                     
+                     temp<-rbind(temp,scan(con,skip=ID.list[ki]-ID.list[ki-1]-1,nlines=1,quiet=TRUE))
+                  }   
                }
             }
             close(con)            
@@ -7251,7 +7416,8 @@ fit4NM<-function()
                 \n         Asan Medical Center
                 \n         University of Ulsan College of Medicine
                 \n         Seoul, Korea.
-                \nVersion: 3.3.0 (Mar. 1, 2011)",cont=TRUE,width=600)   
+                \nVersion: 3.3.3 (Mar. 16, 2011)
+                \nfit4NM 3.3.3 was developed in R 2.10.0 and tested in up to R 2.12.0.",cont=TRUE,width=600)   
    }
 
    ############################################################################# 
@@ -7287,7 +7453,8 @@ fit4NM<-function()
                                       'Convert data'=list('Column to line'=list(handler=ColtoLine),
                                                           'Line to column'=list(handler=LinetoCol)),
                                       'Biosignal data preparation'
-                                              =list('Selection'
+                                              =list('Notes before biosignal data preparation'=list(handler=BiosignalNotes),
+                                                    'Selection'
                                                        =list('Batch process'=list(handler=BDS.batch),
                                                              'Individual process'=list(handler=BDS.indiv)),                                                         
                                                     'Central moving average'       
@@ -7301,8 +7468,10 @@ fit4NM<-function()
                             'Explore NONMEM data'=
                                  list('Select data file'=list(handler=OpenEDAData),
                                       'Summary'=list('Summary statistics-continuous'=list(handler=Summary.stat), 
+                                                     'Summary statistics-continuous by ID'=list(handler=Summary.stat.ind),           
                                                      'Summary statistics-categorical-single level per person'=list(handler=Summary.cat),     
-                                                     'Summary statistics-categorical-multiple levels per person'=list(handler=Summary.cat1)),                                                     
+                                                     'Summary statistics-categorical-multiple levels per person'=list(handler=Summary.cat1),
+                                                     'Summary statistics-categorical by ID'=list(handler=Summary.stat.cat.ind)),                                                     
                                       'Plot'=list('XY plot'=list(handler=XY.plot),
                                                   'DV vs TIME by ID'=list(handler=ID.plot),
                                                   'DV vs TIME by covariates'=list(handler=IDCOV.plot),
